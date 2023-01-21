@@ -1,10 +1,4 @@
-import {
-	App,
-	getLinkpath,
-	MarkdownPostProcessorContext,
-	MarkdownRenderChild,
-	TFile,
-} from "obsidian";
+import { App, getLinkpath, MarkdownPostProcessorContext, MarkdownRenderChild, TFile } from "obsidian";
 
 import { GlossaryPluginSettings } from "./main";
 
@@ -26,22 +20,13 @@ export class GlossaryLinker extends MarkdownRenderChild {
 
 	glossaryFiles: GlossaryFile[] = [];
 
-	constructor(
-		app: App,
-		settings: GlossaryPluginSettings,
-		context: MarkdownPostProcessorContext,
-		containerEl: HTMLElement
-	) {
+	constructor(app: App, settings: GlossaryPluginSettings, context: MarkdownPostProcessorContext, containerEl: HTMLElement) {
 		super(containerEl);
 		this.settings = settings;
 		this.app = app;
 		this.ctx = context;
 
-		// console.log("Settings: ", this.settings);
-		// console.log("Files: ", this.app.vault.getMarkdownFiles());
 		this.glossaryFiles = this.getGlossaryFiles();
-		// console.log("Glossary Files: ", this.glossaryFiles);
-		console.log(containerEl);
 
 		// TODO: Fix this?
 		// If not called, sometimes (especially for lists) elements are added to the context after they already have been loaded
@@ -50,9 +35,7 @@ export class GlossaryLinker extends MarkdownRenderChild {
 	}
 
 	getGlossaryFiles(): GlossaryFile[] {
-		const pattern = new RegExp(
-			`(^|\/)${this.settings.glossaryFolderName}\/`
-		);
+		const pattern = new RegExp(`(^|\/)${this.settings.glossaryFolderName}\/`);
 		const files = this.app.vault.getMarkdownFiles().filter((file) => {
 			return pattern.test(file.path);
 		});
@@ -67,20 +50,14 @@ export class GlossaryLinker extends MarkdownRenderChild {
 		const destName = this.ctx.sourcePath.replace(/(.*).md/, "$1");
 		let currentDestName = destName;
 
-		let currentPath = app.metadataCache.getFirstLinkpathDest(
-			getLinkpath(glossaryName),
-			currentDestName
-		);
+		let currentPath = app.metadataCache.getFirstLinkpathDest(getLinkpath(glossaryName), currentDestName);
 
 		if (currentPath == null) return null;
 
 		while (currentDestName.includes("/")) {
 			currentDestName = currentDestName.replace(/\/[^\/]*?$/, "");
 
-			const newPath = app.metadataCache.getFirstLinkpathDest(
-				getLinkpath(glossaryName),
-				currentDestName
-			);
+			const newPath = app.metadataCache.getFirstLinkpathDest(getLinkpath(glossaryName), currentDestName);
 
 			if ((newPath?.path?.length || 0) > currentPath?.path?.length) {
 				currentPath = newPath;
@@ -94,19 +71,7 @@ export class GlossaryLinker extends MarkdownRenderChild {
 
 	onload() {
 		// return;
-		const tags = [
-			"p",
-			"h1",
-			"h2",
-			"h3",
-			"h4",
-			"h5",
-			"h6",
-			"li",
-			"td",
-			"th",
-			"span",
-		]; //"div"
+		const tags = ["p", "h1", "h2", "h3", "h4", "h5", "h6", "li", "td", "th", "span"]; //"div"
 
 		for (const tag of tags) {
 			const nodeList = this.containerEl.getElementsByTagName(tag);
@@ -114,31 +79,14 @@ export class GlossaryLinker extends MarkdownRenderChild {
 			// if (nodeList.length === 0) continue;
 			if (nodeList.length != 0) console.log(tag, nodeList.length);
 			for (let index = 0; index <= nodeList.length; index++) {
-				const item =
-					index == nodeList.length
-						? this.containerEl
-						: nodeList.item(index);
-				// let inner = item.textContent || "";
-
-				// if (index == nodeList.length) {
-				// 	var x = 0;
-				// 	console.log(["Children of container:", item.childNodes.length]);
-				// }
-
-				// item.childNodes.forEach((childNode) => {
+				const item = index == nodeList.length ? this.containerEl : nodeList.item(index)!;
 
 				for (const glossaryFile of this.glossaryFiles) {
 					// continue;
 					const glossaryEntryName = glossaryFile.name;
-					const entryPattern = new RegExp(
-						`\\b${glossaryEntryName}\\b`
-					);
+					const entryPattern = new RegExp(`\\b${glossaryEntryName}\\b`);
 
-					for (
-						let childNodeIndex = 0;
-						childNodeIndex < item.childNodes.length;
-						childNodeIndex++
-					) {
+					for (let childNodeIndex = 0; childNodeIndex < item.childNodes.length; childNodeIndex++) {
 						const childNode = item.childNodes[childNodeIndex];
 
 						if (childNode.nodeType === Node.TEXT_NODE) {
@@ -152,10 +100,7 @@ export class GlossaryLinker extends MarkdownRenderChild {
 								const pos = match.index!;
 
 								// get linkpath
-								const destName = this.ctx.sourcePath.replace(
-									/(.*).md/,
-									"$1"
-								);
+								const destName = this.ctx.sourcePath.replace(/(.*).md/, "$1");
 								// const destName = this.ctx.sourcePath;
 
 								const linkpath = this.getClosestLinkPath(glossaryEntryName);
@@ -177,35 +122,19 @@ export class GlossaryLinker extends MarkdownRenderChild {
 								// icon.classList.add("glossary-icon");
 
 								const parent = childNode.parentElement;
-								parent?.insertBefore(
-									document.createTextNode(text.slice(0, pos)),
-									childNode
-								);
+								parent?.insertBefore(document.createTextNode(text.slice(0, pos)), childNode);
 								parent?.insertBefore(el, childNode);
 								// parent?.insertBefore(icon, childNode);
-								parent?.insertBefore(
-									document.createTextNode(
-										text.slice(
-											pos + glossaryEntryName.length
-										)
-									),
-									childNode
-								);
+								parent?.insertBefore(document.createTextNode(text.slice(pos + glossaryEntryName.length)), childNode);
 								parent?.removeChild(childNode);
 								childNodeIndex += 1;
-								// console.log("Children after replacement:", [
-								// 	parent,
-								// 	parent?.children,
-								// ]);
-								// break;
 							}
 						}
 					}
 				}
 			}
 
-			// this.containerEl.innerHTML = this.containerEl.replaceWith(refEl);
-			this.containerEl.replaceWith(this.containerEl);
+			// this.containerEl.replaceWith(this.containerEl);
 		}
 	}
 }
