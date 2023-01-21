@@ -19,14 +19,6 @@ class GlossaryFile {
 }
 
 export class GlossaryLinker extends MarkdownRenderChild {
-	static ALL_EMOJIS: Record<string, string> = {
-		":+1:": "👍",
-		":sunglasses:": "😎",
-		":smile:": "😄",
-	};
-
-	static ABBS = ["Abb"];
-
 	text: string;
 	ctx: MarkdownPostProcessorContext;
 	app: App;
@@ -45,10 +37,16 @@ export class GlossaryLinker extends MarkdownRenderChild {
 		this.app = app;
 		this.ctx = context;
 
-		console.log("Settings: ", this.settings);
+		// console.log("Settings: ", this.settings);
 		// console.log("Files: ", this.app.vault.getMarkdownFiles());
 		this.glossaryFiles = this.getGlossaryFiles();
-		console.log("Glossary Files: ", this.glossaryFiles);
+		// console.log("Glossary Files: ", this.glossaryFiles);
+		console.log(containerEl);
+
+		// TODO: Fix this?
+		// If not called, sometimes (especially for lists) elements are added to the context after they already have been loaded
+		// within the parent element. This causes the already added links to be removed...?
+		this.load();
 	}
 
 	getGlossaryFiles(): GlossaryFile[] {
@@ -60,26 +58,38 @@ export class GlossaryLinker extends MarkdownRenderChild {
 		});
 
 		let gFiles = files.map((file) => new GlossaryFile(file));
-		
+
 		// Sort the files by their name length
 		return gFiles.sort((a, b) => b.name.length - a.name.length);
 	}
 
-	getClosestLinkPath() {
+	getClosestLinkPath(glossaryName: string): TFile | null {
 		const destName = this.ctx.sourcePath.replace(/(.*).md/, "$1");
 		let currentDestName = destName;
 
+		let currentPath = app.metadataCache.getFirstLinkpathDest(
+			getLinkpath(glossaryName),
+			currentDestName
+		);
+
+		if (currentPath == null) return null;
+
 		while (currentDestName.includes("/")) {
-			console.log("DestName:", currentDestName);
-			console.log(
-				"Linkpath:",
-				app.metadataCache.getFirstLinkpathDest(
-					getLinkpath(abbr),
-					currentDestName
-				)?.path
-			);
 			currentDestName = currentDestName.replace(/\/[^\/]*?$/, "");
+
+			const newPath = app.metadataCache.getFirstLinkpathDest(
+				getLinkpath(glossaryName),
+				currentDestName
+			);
+
+			if ((newPath?.path?.length || 0) > currentPath?.path?.length) {
+				currentPath = newPath;
+				console.log("Break at New path: ", currentPath);
+				break;
+			}
 		}
+
+		return currentPath;
 	}
 
 	onload() {
@@ -98,23 +108,31 @@ export class GlossaryLinker extends MarkdownRenderChild {
 			"span",
 		]; //"div"
 
-		const nodeLists = tags.map((tag) =>
-			this.containerEl.querySelectorAll(tag)
-		);
-
-		const tagFilter = /<(\w+\b).*?>.*?<\/\1>/;
-
-		for (const nodeList of nodeLists) {
-			for (let index = 0; index < nodeList.length; index++) {
-				const item = nodeList.item(index);
+		for (const tag of tags) {
+			const nodeList = this.containerEl.getElementsByTagName(tag);
+			const children = this.containerEl.children;
+			// if (nodeList.length === 0) continue;
+			if (nodeList.length != 0) console.log(tag, nodeList.length);
+			for (let index = 0; index <= nodeList.length; index++) {
+				const item =
+					index == nodeList.length
+						? this.containerEl
+						: nodeList.item(index);
 				// let inner = item.textContent || "";
+
+				// if (index == nodeList.length) {
+				// 	var x = 0;
+				// 	console.log(["Children of container:", item.childNodes.length]);
+				// }
 
 				// item.childNodes.forEach((childNode) => {
 
 				for (const glossaryFile of this.glossaryFiles) {
 					// continue;
 					const glossaryEntryName = glossaryFile.name;
-					const entryPattern = new RegExp(`\\b${glossaryEntryName}\\b`);
+					const entryPattern = new RegExp(
+						`\\b${glossaryEntryName}\\b`
+					);
 
 					for (
 						let childNodeIndex = 0;
@@ -125,8 +143,6 @@ export class GlossaryLinker extends MarkdownRenderChild {
 
 						if (childNode.nodeType === Node.TEXT_NODE) {
 							let text = childNode.textContent || "";
-							// console.log([item.children, item.childNodes, item.textContent]);
-							console.log([text, childNode]);
 
 							const match = text.match(entryPattern);
 							// while text includes glossary entry name
@@ -142,34 +158,15 @@ export class GlossaryLinker extends MarkdownRenderChild {
 								);
 								// const destName = this.ctx.sourcePath;
 
-								const linkpath =
-									app.metadataCache.getFirstLinkpathDest(
-										getLinkpath(glossaryEntryName),
-										destName
-									);
-
-								let currentDestName = destName;
-
-								while (currentDestName.includes("/")) {
-									console.log("DestName:", currentDestName);
-									console.log(
-										"Linkpath:",
-										app.metadataCache.getFirstLinkpathDest(
-											getLinkpath(glossaryEntryName),
-											currentDestName
-										)?.path
-									);
-									currentDestName = currentDestName.replace(
-										/\/[^\/]*?$/,
-										""
-									);
-								}
+								const linkpath = this.getClosestLinkPath(glossaryEntryName);
 
 								// create link
-								let el = document.createElement("a");
+								let el = this.containerEl.createEl("a");
+								// let el = document.createElement("a");
 								el.text = `${glossaryEntryName}`;
 								el.href = `${linkpath?.path}`;
-								el.setAttribute("data-href", glossaryEntryName);
+								// el.setAttribute("data-href", glossaryEntryName);
+								el.setAttribute("data-href", `${linkpath?.path}`);
 								el.classList.add("internal-link");
 								el.classList.add("glossary-entry");
 								el.target = "_blank";
@@ -196,129 +193,19 @@ export class GlossaryLinker extends MarkdownRenderChild {
 								);
 								parent?.removeChild(childNode);
 								childNodeIndex += 1;
-								console.log("Children after replacement:", [
-									parent,
-									parent?.children,
-								]);
+								// console.log("Children after replacement:", [
+								// 	parent,
+								// 	parent?.children,
+								// ]);
 								// break;
 							}
 						}
 					}
 				}
-				// });
-
-				continue;
-				for (const glossaryFile of this.glossaryFiles) {
-					const glossaryEntryName = glossaryFile.name;
-
-					let startpos = 0;
-
-					// while text includes glossary entry name
-					while (inner.includes(glossaryEntryName, startpos)) {
-						// get next matches of tagFilter
-						const match = inner.slice(startpos).match(tagFilter);
-
-						// Get position of glossary entry name
-						const pos = inner.indexOf(glossaryEntryName, startpos);
-						console.log("Pos:", pos);
-						console.log(
-							`Search for ${glossaryEntryName} in:`,
-							inner.slice(startpos),
-							item.textContent
-						);
-						console.log(
-							"Match:",
-							match,
-							match?.index,
-							match?.[0].length
-						);
-
-						// if abbreviation is inside a tag, increase startpos and continue
-						if (match) {
-							const tag = match[0];
-							const tagStart = match.index || 0;
-							const tagEnd = tagStart + tag.length;
-							if (pos > tagStart && pos < tagEnd) {
-								console.warn("Entry in Tag:", match);
-								startpos += tagEnd;
-								continue;
-							}
-						}
-
-						// get linkpath
-						const destName = this.ctx.sourcePath.replace(
-							/(.*).md/,
-							"$1"
-						);
-						// const destName = this.ctx.sourcePath;
-
-						const linkpath = app.metadataCache.getFirstLinkpathDest(
-							getLinkpath(glossaryEntryName),
-							destName
-						);
-
-						let currentDestName = destName;
-
-						while (currentDestName.includes("/")) {
-							console.log("DestName:", currentDestName);
-							console.log(
-								"Linkpath:",
-								app.metadataCache.getFirstLinkpathDest(
-									getLinkpath(glossaryEntryName),
-									currentDestName
-								)?.path
-							);
-							currentDestName = currentDestName.replace(
-								/\/[^\/]*?$/,
-								""
-							);
-						}
-
-						// create link
-						const refEl = item.createEl("a", {}, (el) => {
-							el.text = glossaryEntryName;
-							el.href = `${linkpath?.path}`;
-							el.setAttribute("data-href", glossaryEntryName);
-							el.classList.add("internal-link");
-							el.target = "_blank";
-							el.rel = "noopener";
-							return el;
-						});
-
-						// replace abbreviation with link
-						inner =
-							inner.slice(0, pos) +
-							refEl.outerHTML +
-							inner.slice(pos + glossaryEntryName.length);
-						startpos = pos + refEl.outerHTML.length;
-					}
-
-					item.innerHTML = inner;
-					// item.textContent = inner;
-				}
-
-				// const isAbbreviation = Abbreviation.ABBS.includes(this.text);
-
-				// const refEl = this.containerEl.createEl("a", {}, (el) => {
-				// 	// @ts-ignore
-				// 	const destName = this.ctx.sourcePath.replace(/(.*).md/, "$1");
-				// 	const linkpath = app.metadataCache.getFirstLinkpathDest(
-				// 		getLinkpath(this.text),
-				// 		destName
-				// 	);
-				// 	// console.log(linkpath);
-
-				// 	el.text = this.text;
-				// 	el.href = `${linkpath?.path}`;
-				// 	el.setAttribute("data-href", this.text);
-				// 	el.classList.add("internal-link");
-				// 	el.target = "_blank";
-				// 	el.rel = "noopener";
-				// 	return el;
-				// });
 			}
 
 			// this.containerEl.innerHTML = this.containerEl.replaceWith(refEl);
+			this.containerEl.replaceWith(this.containerEl);
 		}
 	}
 }
