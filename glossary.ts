@@ -59,7 +59,10 @@ export class GlossaryLinker extends MarkdownRenderChild {
 			return pattern.test(file.path);
 		});
 
-		return files.map((file) => new GlossaryFile(file));
+		let gFiles = files.map((file) => new GlossaryFile(file));
+		
+		// Sort the files by their name length
+		return gFiles.sort((a, b) => b.name.length - a.name.length);
 	}
 
 	getClosestLinkPath() {
@@ -111,6 +114,7 @@ export class GlossaryLinker extends MarkdownRenderChild {
 				for (const glossaryFile of this.glossaryFiles) {
 					// continue;
 					const glossaryEntryName = glossaryFile.name;
+					const entryPattern = new RegExp(`\\b${glossaryEntryName}\\b`);
 
 					for (
 						let childNodeIndex = 0;
@@ -124,44 +128,12 @@ export class GlossaryLinker extends MarkdownRenderChild {
 							// console.log([item.children, item.childNodes, item.textContent]);
 							console.log([text, childNode]);
 
-							let startpos = 0;
-
+							const match = text.match(entryPattern);
 							// while text includes glossary entry name
-							if (text.includes(glossaryEntryName, startpos)) {
-								// get next matches of tagFilter
-								const match = text
-									.slice(startpos)
-									.match(tagFilter);
-
+							// if (text.includes(glossaryEntryName, startpos)) {
+							if (match) {
 								// Get position of glossary entry name
-								const pos = text.indexOf(
-									glossaryEntryName,
-									startpos
-								);
-								console.log("Pos:", pos);
-								console.log(
-									`Search for ${glossaryEntryName} in:`,
-									text.slice(startpos),
-									item.textContent
-								);
-								console.log(
-									"Match:",
-									match,
-									match?.index,
-									match?.[0].length
-								);
-
-								// if abbreviation is inside a tag, increase startpos and continue
-								if (match) {
-									const tag = match[0];
-									const tagStart = match.index || 0;
-									const tagEnd = tagStart + tag.length;
-									if (pos > tagStart && pos < tagEnd) {
-										console.warn("Entry in Tag:", match);
-										startpos += tagEnd;
-										continue;
-									}
-								}
+								const pos = match.index!;
 
 								// get linkpath
 								const destName = this.ctx.sourcePath.replace(
@@ -195,22 +167,17 @@ export class GlossaryLinker extends MarkdownRenderChild {
 
 								// create link
 								let el = document.createElement("a");
-								// const refEl = item.createEl("a", {}, (el) => {
-								el.text = glossaryEntryName;
+								el.text = `${glossaryEntryName}`;
 								el.href = `${linkpath?.path}`;
 								el.setAttribute("data-href", glossaryEntryName);
 								el.classList.add("internal-link");
+								el.classList.add("glossary-entry");
 								el.target = "_blank";
 								el.rel = "noopener";
-								// return el;
-								// });
 
-								// replace abbreviation with link
-								// text =
-								// 	text.slice(0, pos) +
-								// 	refEl.outerHTML +
-								// 	text.slice(pos + glossaryEntryName.length);
-								// startpos = pos + refEl.outerHTML.length;
+								// let icon = document.createElement("sup");
+								// icon.textContent = "🔎";
+								// icon.classList.add("glossary-icon");
 
 								const parent = childNode.parentElement;
 								parent?.insertBefore(
@@ -218,6 +185,7 @@ export class GlossaryLinker extends MarkdownRenderChild {
 									childNode
 								);
 								parent?.insertBefore(el, childNode);
+								// parent?.insertBefore(icon, childNode);
 								parent?.insertBefore(
 									document.createTextNode(
 										text.slice(
@@ -234,10 +202,6 @@ export class GlossaryLinker extends MarkdownRenderChild {
 								]);
 								// break;
 							}
-
-							// item.innerHTML = text;
-							// childNode.textContent = text;
-							// item.textContent = text;
 						}
 					}
 				}

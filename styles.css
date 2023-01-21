@@ -6,3 +6,26 @@ available in the app when your plugin is enabled.
 If your plugin does not need CSS, delete this file.
 
 */
+
+.glossary-entry {
+  /* color: rgb(0, 255, 85); */
+  /* font-weight: bold; */
+  /* font-weight: lighter; */
+  /* text-decoration: none; */
+  /* background-color: var(--color-primary); */
+
+  color: var(--color-blue);
+
+  text-decoration: none !important;
+  text-decoration-line: none !important;
+
+  /* background-color: var(--color-base-30); */
+  
+  /* border-radius: 5px; */
+  /* padding-left: 3px; */
+  /* padding-right: 3px; */
+}
+
+.glossary-icon {
+    user-select: none;
+}
