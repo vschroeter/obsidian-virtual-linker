@@ -9,7 +9,6 @@ import {
 	Setting,
 } from "obsidian";
 
-import { Emoji } from "./emoji";
 import { GlossaryLinker } from "./glossary";
 
 // Remember to rename these classes and interfaces!
