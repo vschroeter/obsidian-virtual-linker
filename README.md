@@ -31,4 +31,5 @@ It is recommended to use the [Hot Reload Plugin](https://github.com/pjeby/hot-re
 ## Roadmap
 
 - [x] Glossaries can be overwritten by nested glossary folders 
+- [ ] Support aliases for glossary entries 
 - [ ] Add glossary entry preview in live preview mode
