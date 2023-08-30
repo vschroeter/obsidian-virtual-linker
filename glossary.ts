@@ -1,14 +1,17 @@
-import { App, getLinkpath, MarkdownPostProcessorContext, MarkdownRenderChild, TFile } from "obsidian";
+import { App, getLinkpath, MarkdownPostProcessorContext, MarkdownRenderChild, TFile,
+	parseFrontMatterAliases } from "obsidian";
 
 import { GlossaryPluginSettings } from "./main";
 
 class GlossaryFile {
 	name: string;
 	file: TFile;
+	aliases: string[];
 
-	constructor(file: TFile) {
+	constructor(file: TFile, aliases: string[] = []) {
 		this.file = file;
 		this.name = file.basename;
+		this.aliases = aliases;
 	}
 }
 
@@ -37,10 +40,13 @@ export class GlossaryLinker extends MarkdownRenderChild {
 	getGlossaryFiles(): GlossaryFile[] {
 		const pattern = new RegExp(`(^|\/)${this.settings.glossaryFolderName}\/`);
 		const files = this.app.vault.getMarkdownFiles().filter((file) => {
-			return pattern.test(file.path);
+			return pattern.test(file.path) && this.ctx.sourcePath != file.path;
 		});
 
-		let gFiles = files.map((file) => new GlossaryFile(file));
+		let gFiles = files.map((file) => {
+			let aliases = parseFrontMatterAliases(app.metadataCache.getFileCache(file)?.frontmatter)
+			return new GlossaryFile(file, aliases ? aliases : []);
+		});
 
 		// Sort the files by their name length
 		return gFiles.sort((a, b) => b.name.length - a.name.length);
@@ -84,7 +90,14 @@ export class GlossaryLinker extends MarkdownRenderChild {
 				for (const glossaryFile of this.glossaryFiles) {
 					// continue;
 					const glossaryEntryName = glossaryFile.name;
-					const entryPattern = new RegExp(`\\b${glossaryEntryName}\\b`);
+
+					let possibleNames = [glossaryEntryName];
+					for (let alias of glossaryFile.aliases) {
+						possibleNames.push(alias.trim());
+					}
+
+					let glossaryEntryNames = possibleNames.join('|');
+					const entryPattern = new RegExp(`\\b${glossaryEntryNames}\\b`, "i");
 
 					for (let childNodeIndex = 0; childNodeIndex < item.childNodes.length; childNodeIndex++) {
 						const childNode = item.childNodes[childNodeIndex];
@@ -108,7 +121,7 @@ export class GlossaryLinker extends MarkdownRenderChild {
 								// create link
 								let el = this.containerEl.createEl("a");
 								// let el = document.createElement("a");
-								el.text = `${glossaryEntryName}`;
+								el.text = `${match[0]}`;
 								el.href = `${linkpath?.path}`;
 								// el.setAttribute("data-href", glossaryEntryName);
 								el.setAttribute("data-href", `${linkpath?.path}`);
