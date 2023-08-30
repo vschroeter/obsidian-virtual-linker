@@ -118,10 +118,12 @@ export class GlossaryLinker extends MarkdownRenderChild {
 
 								const linkpath = this.getClosestLinkPath(glossaryEntryName);
 
+								const replacementText = match[0];
+
 								// create link
 								let el = this.containerEl.createEl("a");
 								// let el = document.createElement("a");
-								el.text = `${match[0]}`;
+								el.text = `${replacementText}`;
 								el.href = `${linkpath?.path}`;
 								// el.setAttribute("data-href", glossaryEntryName);
 								el.setAttribute("data-href", `${linkpath?.path}`);
@@ -138,7 +140,7 @@ export class GlossaryLinker extends MarkdownRenderChild {
 								parent?.insertBefore(document.createTextNode(text.slice(0, pos)), childNode);
 								parent?.insertBefore(el, childNode);
 								// parent?.insertBefore(icon, childNode);
-								parent?.insertBefore(document.createTextNode(text.slice(pos + glossaryEntryName.length)), childNode);
+								parent?.insertBefore(document.createTextNode(text.slice(pos + replacementText.length)), childNode);
 								parent?.removeChild(childNode);
 								childNodeIndex += 1;
 							}
