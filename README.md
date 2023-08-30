@@ -13,7 +13,7 @@ which you have defined in an special glossary folder.
 
 - In the settings, define the name of your glossary folder (defaults to `Glossary`) and add this folder to your vault.
 - For each glossary / abbreviation entry add a new file. This file is exactly like normal files, you can add short or detailed descriptions for this entry.
-- In read mode, all found 
+- In read mode, all found glossary entries will be automatically linked, thus you can preview them by hovering.
 
 ## Manually installing the plugin
 
