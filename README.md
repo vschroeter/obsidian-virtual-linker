@@ -17,7 +17,7 @@ which you have defined in an special glossary folder.
 
 ## Manually installing the plugin
 
-- Copy over `main.js`, `styles.css`, `manifest.json` to your vault `VaultFolder/.obsidian/plugins/your-plugin-id/`.
+- Copy over `main.js`, `styles.css`, `manifest.json` (find them under `Releases`) to your vault `VaultFolder/.obsidian/plugins/obisidian-glossary/`.
 
 ## How to use for development
 
@@ -31,5 +31,5 @@ It is recommended to use the [Hot Reload Plugin](https://github.com/pjeby/hot-re
 ## Roadmap
 
 - [x] Glossaries can be overwritten by nested glossary folders 
-- [ ] Support aliases for glossary entries 
+- [x] Support aliases and case-insensitivity for glossary entries
 - [ ] Add glossary entry preview in live preview mode

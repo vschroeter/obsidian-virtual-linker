@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-glossary",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"description": "This plugin automatically links words in your text that occur in a glossary folder created by you.",
 	"main": "main.js",
 	"scripts": {
