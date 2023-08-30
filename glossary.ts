@@ -77,13 +77,13 @@ export class GlossaryLinker extends MarkdownRenderChild {
 
 	onload() {
 		// return;
-		const tags = ["p", "h1", "h2", "h3", "h4", "h5", "h6", "li", "td", "th", "span"]; //"div"
+		const tags = ["p", "h1", "h2", "h3", "h4", "h5", "h6", "li", "td", "th", "span", "em", "strong"]; //"div"
 
 		for (const tag of tags) {
 			const nodeList = this.containerEl.getElementsByTagName(tag);
 			const children = this.containerEl.children;
 			// if (nodeList.length === 0) continue;
-			if (nodeList.length != 0) console.log(tag, nodeList.length);
+			// if (nodeList.length != 0) console.log(tag, nodeList.length);
 			for (let index = 0; index <= nodeList.length; index++) {
 				const item = index == nodeList.length ? this.containerEl : nodeList.item(index)!;
 
@@ -97,7 +97,7 @@ export class GlossaryLinker extends MarkdownRenderChild {
 					}
 
 					let glossaryEntryNames = possibleNames.join('|');
-					const entryPattern = new RegExp(`\\b${glossaryEntryNames}\\b`, "i");
+					const entryPattern = new RegExp(`\\b(${glossaryEntryNames})\\b`, "i");
 
 					for (let childNodeIndex = 0; childNodeIndex < item.childNodes.length; childNodeIndex++) {
 						const childNode = item.childNodes[childNodeIndex];
@@ -107,7 +107,6 @@ export class GlossaryLinker extends MarkdownRenderChild {
 
 							const match = text.match(entryPattern);
 							// while text includes glossary entry name
-							// if (text.includes(glossaryEntryName, startpos)) {
 							if (match) {
 								// Get position of glossary entry name
 								const pos = match.index!;

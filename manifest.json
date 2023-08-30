@@ -1,7 +1,7 @@
 {
 	"id": "obsidian-glossary",
 	"name": "Obsidian Glossary",
-	"version": "1.0.1",
+	"version": "1.0.2",
 	"minAppVersion": "0.15.0",
 	"description": "This plugin automatically links words in your text that occur in a glossary folder created by you.",
 	"author": "Valentin Schröter",
