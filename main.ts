@@ -10,6 +10,7 @@ import {
 } from "obsidian";
 
 import { GlossaryLinker } from "./glossary";
+import { liveLinkerPlugin } from "./glossary/liveLinker";
 
 // Remember to rename these classes and interfaces!
 
@@ -26,10 +27,15 @@ export default class GlossaryPlugin extends Plugin {
 
 	async onload() {
 		await this.loadSettings();
+
+		const { vault } = this.app;
 		
 		this.registerMarkdownPostProcessor((element, context) => {
-			context.addChild(new GlossaryLinker(app, this.settings, context, element));
+			context.addChild(new GlossaryLinker(this.app, this.settings, context, element));
 		});
+
+		
+		this.registerEditorExtension(liveLinkerPlugin(this.app));
 
 		// This creates an icon in the left ribbon.
 		// const ribbonIconEl = this.addRibbonIcon(
