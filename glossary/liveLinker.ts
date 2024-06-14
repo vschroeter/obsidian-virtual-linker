@@ -40,11 +40,11 @@ export class LiveLinkWidget extends WidgetType {
         const linkText = this.text;
         // console.log(note, linkText, this.app)
         let linkHref = "";
-        // try {
-        //     const linkHref = this.app?.metadataCache?.fileToLinktext(note, note.path, true);
-        // } catch (e) {
-        //     console.error(e)
-        // }
+        try {
+            linkHref = this.app?.metadataCache?.fileToLinktext(note, note.path, true);
+        } catch (e) {
+            console.error(e)
+        }
 
         const span = document.createElement('span');
         const link = document.createElement('a');
