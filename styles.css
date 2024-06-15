@@ -7,7 +7,7 @@ If your plugin does not need CSS, delete this file.
 
 */
 
-.glossary-entry {
+.glossary-entry-plugin {
   /* color: rgb(0, 255, 85); */
   /* font-weight: bold; */
   /* font-weight: lighter; */
@@ -26,6 +26,6 @@ If your plugin does not need CSS, delete this file.
   /* padding-right: 3px; */
 }
 
-.glossary-icon {
+/* .glossary-icon {
     user-select: none;
-}
+} */

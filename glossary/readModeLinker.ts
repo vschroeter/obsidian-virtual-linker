@@ -124,7 +124,7 @@ export class GlossaryLinker extends MarkdownRenderChild {
 								// create link
 								let el = this.containerEl.createEl("a");
 								// let el = document.createElement("a");
-								el.text = `${replacementText}`;
+								el.text = `${replacementText}` + this.settings.glossarySuffix;
 								el.href = `${linkpath?.path}`;
 								// el.setAttribute("data-href", glossaryEntryName);
 								el.setAttribute("data-href", `${linkpath?.path}`);
