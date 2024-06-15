@@ -84,7 +84,7 @@ class LinkerCache {
         if (activeFile === this.activeFilePath && !force) {
             return;
         }
-
+        // console.log("Updating cache")
         this.linkEntries.clear();
 
         this.activeFilePath = activeFile;
@@ -150,6 +150,7 @@ class AutoLinkerPlugin implements PluginValue {
     settings: GlossaryLinkerPluginSettings;
 
     private lastCursorPos: number = 0;
+    private lastActiveFile: string = "";
 
     constructor(view: EditorView, app: App, settings: GlossaryLinkerPluginSettings) {
         this.app = app;
@@ -165,10 +166,14 @@ class AutoLinkerPlugin implements PluginValue {
 
     update(update: ViewUpdate) {
         const cursorPos = update.view.state.selection.main.from;
-        if (this.lastCursorPos != cursorPos || update.docChanged || update.viewportChanged) {
+        const activeFile = this.app.workspace.getActiveFile()?.path;
+        const fileChanged = activeFile != this.lastActiveFile;
+
+        if (this.lastCursorPos != cursorPos || update.docChanged || fileChanged || update.viewportChanged) {
             this.lastCursorPos = cursorPos;
             this.linkerCache.updateCache();
             this.decorations = this.buildDecorations(update.view);
+            this.lastActiveFile = activeFile ?? "";
             // console.log("Update", cursorPos)
         }
     }
@@ -190,27 +195,30 @@ class AutoLinkerPlugin implements PluginValue {
             for (const [name, files] of linkEntries) {
                 const entryPattern = new RegExp(`\\b(${name})\\b`, "gi");
 
+                
                 for (const file of files) {
                     // Find all matches in the text
                     const matches = [...text.matchAll(entryPattern)];
 
                     matches.forEach(match => {
+                        if (match !== undefined) {
+                            const mFrom = (match?.index ?? 0) + from;
+                            const mTo = mFrom + match[0].length;
+                            const originalText = view.state.doc.sliceString(mFrom, mTo);
 
-                        const mFrom = match.index + from;
-                        const mTo = mFrom + match[0].length;
-
-                        additions.push({
-                            from: mFrom,
-                            to: mTo,
-                            widget: new LiveLinkWidget(name, file.file, this.app, this.settings)
-                        });
+                            additions.push({
+                                from: mFrom,
+                                to: mTo,
+                                // widget: new LiveLinkWidget(name, file.file, this.app, this.settings)
+                                widget: new LiveLinkWidget(originalText, file.file, this.app, this.settings)
+                            });
+                        }
                     })
                 }
             }
 
             // Sort additions by from position
             additions.sort((a, b) => a.from - b.from);
-            console.log("ADDS", additions.length)
 
             // We want to exclude some syntax nodes from being decorated,
             // such as code blocks and manually added links
