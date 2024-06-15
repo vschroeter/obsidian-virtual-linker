@@ -10,7 +10,7 @@ import {
     ViewUpdate,
     WidgetType,
 } from "@codemirror/view";
-import { App, parseFrontMatterAliases, TFile, Vault } from "obsidian";
+import { App, getLinkpath, parseFrontMatterAliases, TFile, Vault } from "obsidian";
 
 import IntervalTree from '@flatten-js/interval-tree'
 import { GlossaryLinkerPluginSettings } from "main";
@@ -32,7 +32,10 @@ export class LiveLinkWidget extends WidgetType {
         // console.log(note, linkText, this.app)
         let linkHref = "";
         try {
-            linkHref = this.app?.metadataCache?.fileToLinktext(note, note.path, true);
+            // linkHref = this.app?.metadataCache?.fileToLinktext(note, note.path, false);
+            // const fileLink = this.app?.metadataCache?.fileToLinktext(note, note.path, false);
+            // linkHref = this.app.metadataCache.getFirstLinkpathDest(getLinkpath(note.path), note.path);
+            linkHref = note.path;
         } catch (e) {
             console.error(e)
         }
@@ -42,6 +45,8 @@ export class LiveLinkWidget extends WidgetType {
 
         link.href = linkHref;
         link.textContent = linkText + "🔗";
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
         link.classList.add('internal-link');
 
         span.appendChild(link);
@@ -153,6 +158,8 @@ class AutoLinkerPlugin implements PluginValue {
 
     settings: GlossaryLinkerPluginSettings;
 
+    private lastCursorPos: number = 0;
+
     constructor(view: EditorView, app: App, settings: GlossaryLinkerPluginSettings) {
         this.app = app;
         this.settings = settings;
@@ -166,11 +173,13 @@ class AutoLinkerPlugin implements PluginValue {
     }
 
     update(update: ViewUpdate) {
-        if (update.docChanged || update.viewportChanged) {
+        const cursorPos = update.view.state.selection.main.from;
+        if (this.lastCursorPos != cursorPos || update.docChanged || update.viewportChanged) {
+            this.lastCursorPos = cursorPos;
             this.linkerCache.updateCache();
+            this.decorations = this.buildDecorations(update.view);
+            // console.log("Update", cursorPos)
         }
-        this.decorations = this.buildDecorations(update.view);
-        // console.log("Update")
     }
 
     destroy() { }
