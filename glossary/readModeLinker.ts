@@ -1,7 +1,7 @@
 import { App, getLinkpath, MarkdownPostProcessorContext, MarkdownRenderChild, TFile,
 	parseFrontMatterAliases } from "obsidian";
 
-import { GlossaryPluginSettings } from "./main";
+import { GlossaryLinkerPluginSettings } from "../main";
 
 class GlossaryFile {
 	name: string;
@@ -19,11 +19,11 @@ export class GlossaryLinker extends MarkdownRenderChild {
 	text: string;
 	ctx: MarkdownPostProcessorContext;
 	app: App;
-	settings: GlossaryPluginSettings;
+	settings: GlossaryLinkerPluginSettings;
 
 	glossaryFiles: GlossaryFile[] = [];
 
-	constructor(app: App, settings: GlossaryPluginSettings, context: MarkdownPostProcessorContext, containerEl: HTMLElement) {
+	constructor(app: App, settings: GlossaryLinkerPluginSettings, context: MarkdownPostProcessorContext, containerEl: HTMLElement) {
 		super(containerEl);
 		this.settings = settings;
 		this.app = app;
@@ -38,9 +38,11 @@ export class GlossaryLinker extends MarkdownRenderChild {
 	}
 
 	getGlossaryFiles(): GlossaryFile[] {
-		const pattern = new RegExp(`(^|\/)${this.settings.glossaryFolderName}\/`);
+		const includeAllFiles = this.settings.includeAllFiles || this.settings.linkerDirectories.length === 0;
+        const includeDirPattern = new RegExp(`(^|\/)(${this.settings.linkerDirectories.join("|")})\/`);
 		const files = this.app.vault.getMarkdownFiles().filter((file) => {
-			return pattern.test(file.path) && this.ctx.sourcePath != file.path;
+			if (includeAllFiles) return true;
+			return includeDirPattern.test(file.path) && this.ctx.sourcePath != file.path
 		});
 
 		let gFiles = files.map((file) => {

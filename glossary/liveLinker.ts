@@ -13,16 +13,7 @@ import {
 import { App, parseFrontMatterAliases, TFile, Vault } from "obsidian";
 
 import IntervalTree from '@flatten-js/interval-tree'
-
-export class EmojiWidget extends WidgetType {
-    toDOM(view: EditorView): HTMLElement {
-        const div = document.createElement("span");
-
-        div.innerText = "👉";
-
-        return div;
-    }
-}
+import { GlossaryLinkerPluginSettings } from "main";
 
 export class LiveLinkWidget extends WidgetType {
 
@@ -69,10 +60,6 @@ export class LiveLinkWidget extends WidgetType {
     }
 }
 
-const decoration = Decoration.replace({
-    widget: new EmojiWidget()
-});
-
 
 class CachedFile {
     constructor(public mtime: number, public file: TFile, public aliases: string[], public tags: string[]) { }
@@ -83,21 +70,12 @@ class LinkerCache {
     activeFilePath?: string;
     files: Map<string, CachedFile> = new Map();
     linkEntries: Map<string, CachedFile[]> = new Map();
-    app: App;
     vault: Vault;
 
-    constructor(app: App) {
-        this.app = app;
+    constructor(public app: App, public settings: GlossaryLinkerPluginSettings) {
         const { vault } = app;
         this.vault = vault;
-
         this.updateCache(true);
-
-        // const pattern = /\b(ERB)\b/g;
-        const pattern = new RegExp(`\\b(${"ERB"})\\b`)
-
-        const text = "ansteuerbar";
-        console.log(text.match(pattern));
     }
 
     updateCache(force = false) {
@@ -115,7 +93,21 @@ class LinkerCache {
 
         this.activeFilePath = activeFile;
 
+        const includeAllFiles = this.settings.includeAllFiles || this.settings.linkerDirectories.length === 0;
+        const includeDirPattern = new RegExp(`(^|\/)(${this.settings.linkerDirectories.join("|")})\/`);
+
         for (const file of this.vault.getMarkdownFiles()) {
+
+            // Skip the active file
+            if (file.path === activeFile) {
+                continue;
+            }
+
+            // Skip files that are not in the linker directories
+            if (!includeAllFiles && !includeDirPattern.test(file.path)) {
+                continue;
+            }
+
             const cachedFile = this.files.get(file.path);
             if (cachedFile && cachedFile.mtime === file.stat.mtime) {
                 continue;
@@ -159,13 +151,16 @@ class AutoLinkerPlugin implements PluginValue {
     vault: Vault;
     linkerCache: LinkerCache;
 
-    constructor(view: EditorView, app: App) {
+    settings: GlossaryLinkerPluginSettings;
+
+    constructor(view: EditorView, app: App, settings: GlossaryLinkerPluginSettings) {
         this.app = app;
+        this.settings = settings;
 
         const { vault } = this.app;
         this.vault = vault;
 
-        this.linkerCache = new LinkerCache(app);
+        this.linkerCache = new LinkerCache(app, this.settings);
 
         this.decorations = this.buildDecorations(view);
     }
@@ -214,43 +209,14 @@ class AutoLinkerPlugin implements PluginValue {
                             widget: new LiveLinkWidget(name, file.file, this.app)
                         });
                     }
-
-                    // while ((match = entryPattern.exec(text)) !== null) {
-                    //     const [start, end] = [match.index, match.index + name.length];
-                    //     additions.push({
-                    //         from: start,
-                    //         to: end,
-                    //         widget: new LiveLinkWidget(name, file.file, this.app)
-                    //     });
-                    // }
-                    
-                    // for (let i = from; i < to; i++) {
-                    //     const slice = view.state.doc.sliceString(i, i + name.length);
-                    //     if (slice.match(entryPattern)) {
-                            
-                    //         const match = slice.match(entryPattern);
-                    //         console.log(match, entryPattern, slice)
-
-                    //         // builder.add(
-                    //         //     i,
-                    //         //     i + name.length,
-                    //         //     Decoration.replace({
-                    //         //         widget: new LiveLinkWidget(name, file.file)
-                    //         //     })
-                    //         // );
-                    //         additions.push({
-                    //             from: i,
-                    //             to: i + name.length,
-                    //             widget: new LiveLinkWidget(name, file.file, this.app)
-                    //         });
-                    //     }
-                    // }
                 }
             }
 
             // Sort additions by from position
             additions.sort((a, b) => a.from - b.from);
 
+            // We want to exclude some syntax nodes from being decorated,
+            // such as code blocks and manually added links
             const excludedIntervalTree = new IntervalTree();
             const excludedTypes = [
                 "codeblock",
@@ -294,181 +260,14 @@ class AutoLinkerPlugin implements PluginValue {
     }
 }
 
-// const pluginSpec: PluginSpec<EmojiListPlugin> = {
-//     decorations: (value: EmojiListPlugin) => value.decorations,
-// };
-
-// export const emojiListPlugin = ViewPlugin.fromClass(
-//     EmojiListPlugin,
-//     pluginSpec
-// );
 
 const pluginSpec: PluginSpec<AutoLinkerPlugin> = {
     decorations: (value: AutoLinkerPlugin) => value.decorations,
 };
 
-export const liveLinkerPlugin = (app: App) => {
+export const liveLinkerPlugin = (app: App, settings: GlossaryLinkerPluginSettings) => {
     return ViewPlugin.define((editorView: EditorView) => {
-        return (new AutoLinkerPlugin(editorView, app));
+        return (new AutoLinkerPlugin(editorView, app, settings));
     }, pluginSpec)
 }
-
-
-
-// import { App, getLinkpath, MarkdownPostProcessorContext, MarkdownRenderChild, TFile,
-// 	parseFrontMatterAliases } from "obsidian";
-
-// import { GlossaryPluginSettings } from "./main";
-
-// class GlossaryFile {
-// 	name: string;
-// 	file: TFile;
-// 	aliases: string[];
-
-// 	constructor(file: TFile, aliases: string[] = []) {
-// 		this.file = file;
-// 		this.name = file.basename;
-// 		this.aliases = aliases;
-// 	}
-// }
-
-// export class GlossaryLinker extends MarkdownRenderChild {
-// 	text: string;
-// 	ctx: MarkdownPostProcessorContext;
-// 	app: App;
-// 	settings: GlossaryPluginSettings;
-
-// 	glossaryFiles: GlossaryFile[] = [];
-
-// 	constructor(app: App, settings: GlossaryPluginSettings, context: MarkdownPostProcessorContext, containerEl: HTMLElement) {
-// 		super(containerEl);
-// 		this.settings = settings;
-// 		this.app = app;
-// 		this.ctx = context;
-
-// 		this.glossaryFiles = this.getGlossaryFiles();
-
-// 		// TODO: Fix this?
-// 		// If not called, sometimes (especially for lists) elements are added to the context after they already have been loaded
-// 		// within the parent element. This causes the already added links to be removed...?
-// 		this.load();
-// 	}
-
-// 	getGlossaryFiles(): GlossaryFile[] {
-// 		const pattern = new RegExp(`(^|\/)${this.settings.glossaryFolderName}\/`);
-// 		const files = this.app.app.getMarkdownFiles().filter((file) => {
-// 			return pattern.test(file.path) && this.ctx.sourcePath != file.path;
-// 		});
-
-// 		let gFiles = files.map((file) => {
-// 			let aliases = parseFrontMatterAliases(app.metadataCache.getFileCache(file)?.frontmatter)
-// 			return new GlossaryFile(file, aliases ? aliases : []);
-// 		});
-
-// 		// Sort the files by their name length
-// 		return gFiles.sort((a, b) => b.name.length - a.name.length);
-// 	}
-
-// 	getClosestLinkPath(glossaryName: string): TFile | null {
-// 		const destName = this.ctx.sourcePath.replace(/(.*).md/, "$1");
-// 		let currentDestName = destName;
-
-// 		let currentPath = app.metadataCache.getFirstLinkpathDest(getLinkpath(glossaryName), currentDestName);
-
-// 		if (currentPath == null) return null;
-
-// 		while (currentDestName.includes("/")) {
-// 			currentDestName = currentDestName.replace(/\/[^\/]*?$/, "");
-
-// 			const newPath = app.metadataCache.getFirstLinkpathDest(getLinkpath(glossaryName), currentDestName);
-
-// 			if ((newPath?.path?.length || 0) > currentPath?.path?.length) {
-// 				currentPath = newPath;
-// 				console.log("Break at New path: ", currentPath);
-// 				break;
-// 			}
-// 		}
-
-// 		return currentPath;
-// 	}
-
-// 	onload() {
-// 		// return;
-// 		const tags = ["p", "h1", "h2", "h3", "h4", "h5", "h6", "li", "td", "th", "span", "em", "strong"]; //"div"
-
-// 		for (const tag of tags) {
-// 			const nodeList = this.containerEl.getElementsByTagName(tag);
-// 			const children = this.containerEl.children;
-// 			// if (nodeList.length === 0) continue;
-// 			// if (nodeList.length != 0) console.log(tag, nodeList.length);
-// 			for (let index = 0; index <= nodeList.length; index++) {
-// 				const item = index == nodeList.length ? this.containerEl : nodeList.item(index)!;
-
-// 				for (const glossaryFile of this.glossaryFiles) {
-// 					// continue;
-// 					const glossaryEntryName = glossaryFile.name;
-
-// 					let possibleNames = [glossaryEntryName];
-// 					for (let alias of glossaryFile.aliases) {
-// 						possibleNames.push(alias.trim());
-// 					}
-
-// 					let glossaryEntryNames = possibleNames.join('|');
-// 					const entryPattern = new RegExp(`\\b(${glossaryEntryNames})\\b`, "i");
-
-// 					for (let childNodeIndex = 0; childNodeIndex < item.childNodes.length; childNodeIndex++) {
-// 						const childNode = item.childNodes[childNodeIndex];
-
-// 						if (childNode.nodeType === Node.TEXT_NODE) {
-// 							let text = childNode.textContent || "";
-
-// 							const match = text.match(entryPattern);
-// 							// while text includes glossary entry name
-// 							if (match) {
-// 								// Get position of glossary entry name
-// 								const pos = match.index!;
-
-// 								// get linkpath
-// 								const destName = this.ctx.sourcePath.replace(/(.*).md/, "$1");
-// 								// const destName = this.ctx.sourcePath;
-
-// 								const linkpath = this.getClosestLinkPath(glossaryEntryName);
-
-// 								const replacementText = match[0];
-
-// 								// create link
-// 								let el = this.containerEl.createEl("a");
-// 								// let el = document.createElement("a");
-// 								el.text = `${replacementText}`;
-// 								el.href = `${linkpath?.path}`;
-// 								// el.setAttribute("data-href", glossaryEntryName);
-// 								el.setAttribute("data-href", `${linkpath?.path}`);
-// 								el.classList.add("internal-link");
-// 								el.classList.add("glossary-entry");
-// 								el.target = "_blank";
-// 								el.rel = "noopener";
-
-// 								// let icon = document.createElement("sup");
-// 								// icon.textContent = "🔎";
-// 								// icon.classList.add("glossary-icon");
-
-// 								const parent = childNode.parentElement;
-// 								parent?.insertBefore(document.createTextNode(text.slice(0, pos)), childNode);
-// 								parent?.insertBefore(el, childNode);
-// 								// parent?.insertBefore(icon, childNode);
-// 								parent?.insertBefore(document.createTextNode(text.slice(pos + replacementText.length)), childNode);
-// 								parent?.removeChild(childNode);
-// 								childNodeIndex += 1;
-// 							}
-// 						}
-// 					}
-// 				}
-// 			}
-
-// 			// this.containerEl.replaceWith(this.containerEl);
-// 		}
-// 	}
-// }
-
-
 
