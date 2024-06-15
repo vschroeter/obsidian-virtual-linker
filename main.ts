@@ -17,11 +17,13 @@ import { liveLinkerPlugin } from "./glossary/liveLinker";
 export interface GlossaryLinkerPluginSettings {
 	includeAllFiles: boolean;
 	linkerDirectories: string[];
+	glossarySuffix: string;
 }
 
 const DEFAULT_SETTINGS: GlossaryLinkerPluginSettings = {
 	includeAllFiles: true,
 	linkerDirectories: ["Glossary"],
+	glossarySuffix: "🔗",
 };
 
 export default class GlossaryLinkerPlugin extends Plugin {
@@ -112,6 +114,18 @@ class LinkerSettingTab extends PluginSettingTab {
 					text.inputEl.style.height = '100px'
 				});
 		}
+
+		new Setting(containerEl)
+			.setName("Glossary suffix")
+			.setDesc("The suffix to add to auto generated glossary links.")
+			.addText((text) =>
+				text
+					.setValue(this.plugin.settings.glossarySuffix)
+					.onChange(async (value) => {
+						console.log("New glossary suffix: " + value);
+						await this.plugin.updateSettings({ glossarySuffix: value });
+					})
+			);
 	}
 }
 
