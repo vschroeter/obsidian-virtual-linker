@@ -14,6 +14,7 @@ import { App, getLinkpath, parseFrontMatterAliases, TFile, Vault } from "obsidia
 
 import IntervalTree from '@flatten-js/interval-tree'
 import { GlossaryLinkerPluginSettings } from "main";
+import { LinkerCache, PrefixTree } from "./linkerCache";
 
 export class LiveLinkWidget extends WidgetType {
 
@@ -57,88 +58,90 @@ export class LiveLinkWidget extends WidgetType {
 }
 
 
-class CachedFile {
-    constructor(public mtime: number, public file: TFile, public aliases: string[], public tags: string[]) { }
-}
+// class CachedFile {
+//     constructor(public mtime: number, public file: TFile, public aliases: string[], public tags: string[]) { }
+// }
 
 
-class LinkerCache {
-    activeFilePath?: string;
-    files: Map<string, CachedFile> = new Map();
-    linkEntries: Map<string, CachedFile[]> = new Map();
-    vault: Vault;
+// class LinkerCache {
+//     activeFilePath?: string;
+//     files: Map<string, CachedFile> = new Map();
+//     linkEntries: Map<string, CachedFile[]> = new Map();
+//     vault: Vault;
 
-    constructor(public app: App, public settings: GlossaryLinkerPluginSettings) {
-        const { vault } = app;
-        this.vault = vault;
-        this.updateCache(true);
-    }
+//     constructor(public app: App, public settings: GlossaryLinkerPluginSettings) {
+//         const { vault } = app;
+//         this.vault = vault;
+//         this.updateCache(true);
+//     }
 
-    updateCache(force = false) {
-        if (!this.app?.workspace?.getActiveFile()) {
-            return;
-        }
+//     updateCache(force = false) {
+//         if (!this.app?.workspace?.getActiveFile()) {
+//             return;
+//         }
 
-        // We only need to update cache if the active file has changed
-        const activeFile = this.app.workspace.getActiveFile()?.path;
-        if (activeFile === this.activeFilePath && !force) {
-            return;
-        }
-        // console.log("Updating cache")
-        this.linkEntries.clear();
+//         // We only need to update cache if the active file has changed
+//         const activeFile = this.app.workspace.getActiveFile()?.path;
+//         if (activeFile === this.activeFilePath && !force) {
+//             return;
+//         }
+//         // console.log("Updating cache")
+//         this.linkEntries.clear();
 
-        this.activeFilePath = activeFile;
+//         this.activeFilePath = activeFile;
 
-        const includeAllFiles = this.settings.includeAllFiles || this.settings.linkerDirectories.length === 0;
-        const includeDirPattern = new RegExp(`(^|\/)(${this.settings.linkerDirectories.join("|")})\/`);
+//         const includeAllFiles = this.settings.includeAllFiles || this.settings.linkerDirectories.length === 0;
+//         const includeDirPattern = new RegExp(`(^|\/)(${this.settings.linkerDirectories.join("|")})\/`);
 
-        for (const file of this.vault.getMarkdownFiles()) {
+//         for (const file of this.vault.getMarkdownFiles()) {
 
-            // Skip the active file
-            if (file.path === activeFile) {
-                continue;
-            }
+//             // Skip the active file
+//             if (file.path === activeFile) {
+//                 continue;
+//             }
 
-            // Skip files that are not in the linker directories
-            if (!includeAllFiles && !includeDirPattern.test(file.path)) {
-                continue;
-            }
+//             // Skip files that are not in the linker directories
+//             if (!includeAllFiles && !includeDirPattern.test(file.path)) {
+//                 continue;
+//             }
 
-            const cachedFile = this.files.get(file.path);
-            if (cachedFile && cachedFile.mtime === file.stat.mtime) {
-                continue;
-            }
+//             const cachedFile = this.files.get(file.path);
+//             if (cachedFile && cachedFile.mtime === file.stat.mtime) {
+//                 continue;
+//             }
 
-            const metadata = this.app.metadataCache.getFileCache(file);
-            const aliases = parseFrontMatterAliases(metadata?.frontmatter);
-            const tags = (metadata?.tags || []).map(tag => tag.tag);
+//             const metadata = this.app.metadataCache.getFileCache(file);
+//             const aliases = parseFrontMatterAliases(metadata?.frontmatter);
+//             const tags = (metadata?.tags || []).map(tag => tag.tag);
 
-            const cacheFile = new CachedFile(file.stat.mtime, file, aliases ? aliases : [], tags ? tags : []);
+//             const cacheFile = new CachedFile(file.stat.mtime, file, aliases ? aliases : [], tags ? tags : []);
 
-            this.files.set(file.path, cacheFile);
-        }
+//             this.files.set(file.path, cacheFile);
+//         }
 
-        // Update the link entries
-        for (const file of this.files.values()) {
-            this._addEntry(file.file.basename, file);
-            for (const alias of file.aliases) {
-                this._addEntry(alias, file);
-            }
-            for (const tag of file.tags) {
-                this._addEntry(tag, file);
-            }
-        }
-    }
+//         // Update the link entries
+//         for (const file of this.files.values()) {
+//             this._addEntry(file.file.basename, file);
+//             for (const alias of file.aliases) {
+//                 this._addEntry(alias, file);
+//             }
+//             for (const tag of file.tags) {
+//                 this._addEntry(tag, file);
+//             }
+//         }
 
-    _addEntry(name: string, file: CachedFile) {
-        let entries = this.linkEntries.get(name);
-        if (!entries) {
-            entries = [];
-            this.linkEntries.set(name, entries);
-        }
-        entries.push(file);
-    }
-}
+//         console.log("Link entries", this.linkEntries)
+//     }
+
+//     _addEntry(name: string, file: CachedFile) {
+//         let entries = this.linkEntries.get(name);
+//         if (!entries) {
+//             entries = [];
+//             this.linkEntries.set(name, entries);
+//         }
+//         entries.push(file);
+//     }
+// }
 
 
 class AutoLinkerPlugin implements PluginValue {
@@ -178,6 +181,8 @@ class AutoLinkerPlugin implements PluginValue {
         }
     }
 
+
+
     destroy() { }
 
     buildDecorations(view: EditorView): DecorationSet {
@@ -185,40 +190,135 @@ class AutoLinkerPlugin implements PluginValue {
 
         for (let { from, to } of view.visibleRanges) {
 
+            console.log("Visible range", from, to, this.linkerCache)
+            this.linkerCache.reset();
             const text = view.state.doc.sliceString(from, to);
+            const textHasUnicode = /[^\x00-\x7F]/.test(text);
             // console.log(text)
 
             // For every glossary file and its aliases we now search the text for occurrences
-            const additions: { from: number, to: number, widget: WidgetType }[] = [];
+            const additions: { id: number, from: number, to: number, widget: WidgetType }[] = [];
 
-            const linkEntries = this.linkerCache.linkEntries;
-            for (const [name, files] of linkEntries) {
-                const entryPattern = new RegExp(`\\b(${name})\\b`, "gi");
+            let id = 0;
+            // Iterate over every char in the text
+            for (let i = 0; i <= text.length; i++) {
+                const char = i < text.length ? text[i] : "\n";
+                // console.log("Char", char)
 
-                
-                for (const file of files) {
-                    // Find all matches in the text
-                    const matches = [...text.matchAll(entryPattern)];
+                // If we are at a word boundary, get the current fitting files
+                if (PrefixTree.checkWordBoundary(char)) {
+                    // console.log("Word boundary")
+                    const currentNodes = this.linkerCache.cache.getCurrentMatchNodes(i);
+                    // console.log("Current nodes", currentNodes, this.linkerCache.cache._currentNodes.length)
+                    if (currentNodes.length > 0) {
+                        console.log("Current nodes", currentNodes)
 
-                    matches.forEach(match => {
-                        if (match !== undefined) {
-                            const mFrom = (match?.index ?? 0) + from;
-                            const mTo = mFrom + match[0].length;
-                            const originalText = view.state.doc.sliceString(mFrom, mTo);
+                        // TODO: Handle multiple matches
+                        const node = currentNodes[0];
+                        const nFrom = node.start;
+                        const nTo = node.end;
+                        const name = text.slice(nFrom, nTo);
 
-                            additions.push({
-                                from: mFrom,
-                                to: mTo,
-                                // widget: new LiveLinkWidget(name, file.file, this.app, this.settings)
-                                widget: new LiveLinkWidget(originalText, file.file, this.app, this.settings)
-                            });
-                        }
-                    })
+                        // TODO: Handle multiple files
+                        const file = node.files.values().next().value;
+
+                        additions.push({
+                            id: id++,
+                            from: from + nFrom,
+                            to: from + nTo,
+                            widget: new LiveLinkWidget(name, file, this.app, this.settings)
+                        });
+
+
+                        // const names = currentNodes.map(node => node.name);
+                        // for (const name of names) {
+                        //     const files = this.linkerCache.linkEntries.get(name);
+                        //     if (files) {
+                        //         for (const file of files) {
+                        //             const mFrom = from + i - name.length;
+                        //             const mTo = from + i;
+                        //             const originalText = view.state.doc.sliceString(mFrom, mTo);
+
+                        //             additions.push({
+                        //                 from: mFrom,
+                        //                 to: mTo,
+                        //                 // widget: new LiveLinkWidget(name, file.file, this.app, this.settings)
+                        //                 widget: new LiveLinkWidget(originalText, file.file, this.app, this.settings)
+                        //             });
+                        //         }
+                        //     }
+                        // }
+                    }
+                }
+
+                this.linkerCache.cache.pushChar(char);
+
+            }
+
+            // return;
+
+            // const linkEntries = this.linkerCache.linkEntries;
+            // for (const [name, files] of linkEntries) {
+            //     let entryPattern: RegExp;
+            //     if (textHasUnicode) {
+            //         // Pattern to handle unicode characters
+            //         entryPattern = new RegExp(`(?<![\\p{L}\\p{N}])(${name})(?![\\p{L}\\p{N}])`, "ugi");
+            //     } else {
+            //         entryPattern = new RegExp(`\\b(${name})\\b`, "ugi");
+            //     }
+            //     for (const file of files) {
+            //         // Find all matches in the text
+            //         const matches = [...text.matchAll(entryPattern)];
+
+            //         matches.forEach(match => {
+            //             if (match !== undefined) {
+            //                 const mFrom = (match?.index ?? 0) + from;
+            //                 const mTo = mFrom + match[0].length;
+            //                 const originalText = view.state.doc.sliceString(mFrom, mTo);
+
+            //                 additions.push({
+            //                     from: mFrom,
+            //                     to: mTo,
+            //                     // widget: new LiveLinkWidget(name, file.file, this.app, this.settings)
+            //                     widget: new LiveLinkWidget(originalText, file.file, this.app, this.settings)
+            //                 });
+            //             }
+            //         })
+
+            //         // TODO: Handle multiple files
+            //         break;
+            //     }
+            // }
+
+            // Sort additions by from position
+            additions.sort((a, b) => {
+                if (a.from === b.from) {
+                    return b.to - a.to;
+                }
+                return a.from - b.from
+            });
+
+            // Delete additions that overlap
+            // Additions are sorted by from position and after that by length, we want to keep longer additions
+            const filteredAdditions = [];
+            const additionsToDelete: Map<number, boolean> = new Map();
+            for (let i = 0; i < additions.length; i++) {
+                const addition = additions[i];
+                for (let j = i + 1; j < additions.length; j++) {
+                    const otherAddition = additions[j];
+                    if (otherAddition.from >= addition.to) {
+                        break;
+                    }
+
+                    additionsToDelete.set(otherAddition.id, true);
                 }
             }
 
-            // Sort additions by from position
-            additions.sort((a, b) => a.from - b.from);
+            for (const addition of additions) {
+                if (!additionsToDelete.has(addition.id)) {
+                    filteredAdditions.push(addition);
+                }
+            }
 
             // We want to exclude some syntax nodes from being decorated,
             // such as code blocks and manually added links
@@ -248,7 +348,7 @@ class AutoLinkerPlugin implements PluginValue {
 
             const cursorPos = view.state.selection.main.from;
 
-            additions.forEach(addition => {
+            filteredAdditions.forEach(addition => {
                 const [from, to] = [addition.from, addition.to];
                 const overlaps = excludedIntervalTree.search([from, to]);
                 const cursorNearby = (cursorPos >= from - 0 && cursorPos <= to + 0);

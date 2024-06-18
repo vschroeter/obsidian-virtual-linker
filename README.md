@@ -51,5 +51,6 @@ You can style them by adding a CSS-snippet at `VaultFolder/.obsidian/snippets/gl
 - Clone this repo (into `your-vault/.obsidian/plugins/`).
 - `yarn` to install dependencies
 - `yarn dev` to start compilation in watch mode.
+- `yarn build` to compile your `main.ts` into `main.js`.
 
 It is recommended to use the [Hot Reload Plugin](https://github.com/pjeby/hot-reload) for development.
