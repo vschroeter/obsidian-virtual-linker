@@ -1,7 +1,10 @@
-import { App, getLinkpath, MarkdownPostProcessorContext, MarkdownRenderChild, TFile,
-	parseFrontMatterAliases } from "obsidian";
+import {
+	App, getLinkpath, MarkdownPostProcessorContext, MarkdownRenderChild, TFile,
+	parseFrontMatterAliases
+} from "obsidian";
 
 import { GlossaryLinkerPluginSettings } from "../main";
+import { LinkerCache, PrefixTree } from "./linkerCache";
 
 class GlossaryFile {
 	name: string;
@@ -20,6 +23,7 @@ export class GlossaryLinker extends MarkdownRenderChild {
 	ctx: MarkdownPostProcessorContext;
 	app: App;
 	settings: GlossaryLinkerPluginSettings;
+	linkerCache: LinkerCache;
 
 	glossaryFiles: GlossaryFile[] = [];
 
@@ -28,6 +32,8 @@ export class GlossaryLinker extends MarkdownRenderChild {
 		this.settings = settings;
 		this.app = app;
 		this.ctx = context;
+
+		this.linkerCache = new LinkerCache(app, settings);
 
 		this.glossaryFiles = this.getGlossaryFiles();
 
@@ -39,14 +45,14 @@ export class GlossaryLinker extends MarkdownRenderChild {
 
 	getGlossaryFiles(): GlossaryFile[] {
 		const includeAllFiles = this.settings.includeAllFiles || this.settings.linkerDirectories.length === 0;
-        const includeDirPattern = new RegExp(`(^|\/)(${this.settings.linkerDirectories.join("|")})\/`);
+		const includeDirPattern = new RegExp(`(^|\/)(${this.settings.linkerDirectories.join("|")})\/`);
 		const files = this.app.vault.getMarkdownFiles().filter((file) => {
 			if (includeAllFiles) return true;
 			return includeDirPattern.test(file.path) && this.ctx.sourcePath != file.path
 		});
 
 		let gFiles = files.map((file) => {
-			let aliases = parseFrontMatterAliases(app.metadataCache.getFileCache(file)?.frontmatter)
+			let aliases = parseFrontMatterAliases(this.app.metadataCache.getFileCache(file)?.frontmatter)
 			return new GlossaryFile(file, aliases ? aliases : []);
 		});
 
@@ -80,8 +86,10 @@ export class GlossaryLinker extends MarkdownRenderChild {
 	onload() {
 		// return;
 		const tags = ["p", "h1", "h2", "h3", "h4", "h5", "h6", "li", "td", "th", "span", "em", "strong"]; //"div"
+		const hasUnicode = (text: string) => (/[^\x00-\x7F]/.test(text))
 
 		for (const tag of tags) {
+			// console.log("Tag: ", tag);
 			const nodeList = this.containerEl.getElementsByTagName(tag);
 			const children = this.containerEl.children;
 			// if (nodeList.length === 0) continue;
@@ -89,65 +97,134 @@ export class GlossaryLinker extends MarkdownRenderChild {
 			for (let index = 0; index <= nodeList.length; index++) {
 				const item = index == nodeList.length ? this.containerEl : nodeList.item(index)!;
 
-				for (const glossaryFile of this.glossaryFiles) {
-					// continue;
-					const glossaryEntryName = glossaryFile.name;
+				for (let childNodeIndex = 0; childNodeIndex < item.childNodes.length; childNodeIndex++) {
+					const childNode = item.childNodes[childNodeIndex];
 
-					let possibleNames = [glossaryEntryName];
-					for (let alias of glossaryFile.aliases) {
-						possibleNames.push(alias.trim());
-					}
+					if (childNode.nodeType === Node.TEXT_NODE) {
+						let text = childNode.textContent || "";
+						if (text.length === 0) continue;
 
-					let glossaryEntryNames = possibleNames.join('|');
-					const entryPattern = new RegExp(`\\b(${glossaryEntryNames})\\b`, "i");
+						this.linkerCache.reset();
 
-					for (let childNodeIndex = 0; childNodeIndex < item.childNodes.length; childNodeIndex++) {
-						const childNode = item.childNodes[childNodeIndex];
+						const additions: { id: number, from: number, to: number, text: string, file: TFile }[] = [];
 
-						if (childNode.nodeType === Node.TEXT_NODE) {
-							let text = childNode.textContent || "";
+						let id = 0;
+						// Iterate over every char in the text
+						for (let i = 0; i <= text.length; i) {
+                			// Do this to get unicode characters as whole chars and not only half of them
+							const codePoint = text.codePointAt(i)!;
+							const char = i < text.length ? String.fromCodePoint(codePoint) : "\n";
+							// const char = i < text.length ? text[i] : "\n";
 
-							const match = text.match(entryPattern);
-							// while text includes glossary entry name
-							if (match) {
-								// Get position of glossary entry name
-								const pos = match.index!;
+							// If we are at a word boundary, get the current fitting files
+							if (PrefixTree.checkWordBoundary(char)) {
+								const currentNodes = this.linkerCache.cache.getCurrentMatchNodes(i);
+								if (currentNodes.length > 0) {
 
-								// get linkpath
-								const destName = this.ctx.sourcePath.replace(/(.*).md/, "$1");
-								// const destName = this.ctx.sourcePath;
+									// TODO: Handle multiple matches
+									const node = currentNodes[0];
+									const nFrom = node.start;
+									const nTo = node.end;
+									const name = text.slice(nFrom, nTo);
 
-								const linkpath = this.getClosestLinkPath(glossaryEntryName);
+									// TODO: Handle multiple files
+									const file = node.files.values().next().value;
 
-								const replacementText = match[0];
+									additions.push({
+										id: id++,
+										from: nFrom,
+										to: nTo,
+										text: name,
+										file: file
+									});
+								}
+							}
 
-								// create link
-								let el = this.containerEl.createEl("a");
-								// let el = document.createElement("a");
-								el.text = `${replacementText}` + this.settings.glossarySuffix;
-								el.href = `${linkpath?.path}`;
-								// el.setAttribute("data-href", glossaryEntryName);
-								el.setAttribute("data-href", `${linkpath?.path}`);
-								el.classList.add("internal-link");
-								el.classList.add("glossary-entry");
-								el.target = "_blank";
-								el.rel = "noopener";
+							// Push the char to get the next nodes in the prefix tree
+							this.linkerCache.cache.pushChar(char);
+							i += char.length;
+						}
 
-								// let icon = document.createElement("sup");
-								// icon.textContent = "🔎";
-								// icon.classList.add("glossary-icon");
+						// Sort additions by from position
+						additions.sort((a, b) => {
+							if (a.from === b.from) {
+								return b.to - a.to;
+							}
+							return a.from - b.from
+						});
 
-								const parent = childNode.parentElement;
-								parent?.insertBefore(document.createTextNode(text.slice(0, pos)), childNode);
-								parent?.insertBefore(el, childNode);
-								// parent?.insertBefore(icon, childNode);
-								parent?.insertBefore(document.createTextNode(text.slice(pos + replacementText.length)), childNode);
-								parent?.removeChild(childNode);
-								childNodeIndex += 1;
+						// Delete additions that overlap
+						// Additions are sorted by from position and after that by length, we want to keep longer additions
+						const filteredAdditions = [];
+						const additionsToDelete: Map<number, boolean> = new Map();
+						for (let i = 0; i < additions.length; i++) {
+							const addition = additions[i];
+							for (let j = i + 1; j < additions.length; j++) {
+								const otherAddition = additions[j];
+								if (otherAddition.from >= addition.to) {
+									break;
+								}
+
+								additionsToDelete.set(otherAddition.id, true);
 							}
 						}
+
+						for (const addition of additions) {
+							if (!additionsToDelete.has(addition.id)) {
+								filteredAdditions.push(addition);
+							}
+						}
+
+						const parent = childNode.parentElement;
+						let lastTo = 0;
+						// console.log("Parent: ", parent);
+
+						for (let addition of filteredAdditions) {
+							// get linkpath
+							const destName = this.ctx.sourcePath.replace(/(.*).md/, "$1");
+							// const destName = this.ctx.sourcePath;
+
+							// const linkpath = this.getClosestLinkPath(glossaryEntryName);
+							const linkpath = addition.file.path;
+
+							const replacementText = addition.text;
+							// console.log("Replacement text: ", replacementText);
+
+							// create link
+							let el = this.containerEl.createEl("a");
+							// let el = document.createElement("a");
+							el.text = `${replacementText}` + this.settings.glossarySuffix;
+							el.href = `${linkpath}`;
+							// el.setAttribute("data-href", glossaryEntryName);
+							el.setAttribute("data-href", `${linkpath}`);
+							el.classList.add("internal-link");
+							el.classList.add("glossary-entry");
+							el.target = "_blank";
+							el.rel = "noopener";
+
+							// let icon = document.createElement("sup");
+							// icon.textContent = "🔎";
+							// icon.classList.add("glossary-icon");
+
+							if (addition.from > 0) {
+								parent?.insertBefore(document.createTextNode(text.slice(lastTo, addition.from)), childNode);
+							}
+
+							// parent?.insertBefore(document.createTextNode(text.slice(0, addition.from)), childNode);
+							parent?.insertBefore(el, childNode);
+							// parent?.insertBefore(icon, childNode);
+							
+							lastTo = addition.to;
+						}
+						const textLength = text.length;
+						if (lastTo < textLength) {
+							parent?.insertBefore(document.createTextNode(text.slice(lastTo)), childNode);
+						}
+						parent?.removeChild(childNode);
+						childNodeIndex += 1;
 					}
 				}
+				// }
 			}
 
 			// this.containerEl.replaceWith(this.containerEl);

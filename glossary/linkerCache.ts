@@ -22,16 +22,6 @@ export class PrefixNode {
     files: Set<TFile> = new Set();
     charValue: string = "";
     value: string = "";
-
-    // get value(): string {
-    //     let node: PrefixNode | undefined = this;
-    //     let value = "";
-    //     while (node) {
-    //         value = node.charValue + value;
-    //         node = node.parent;
-    //     }
-    //     return value;
-    // }
 }
 
 export class MatchNode {
@@ -47,7 +37,6 @@ export class MatchNode {
 
 export class PrefixTree {
     root: PrefixNode = new PrefixNode();
-    // _current: PrefixNode = this.root;
     _currentNodes: PrefixNode[] = [];
 
     constructor(public app: App, public settings: GlossaryLinkerPluginSettings) {
@@ -150,7 +139,7 @@ export class PrefixTree {
     }
 
     static checkWordBoundary(char: string): boolean {
-        const pattern = /[\n\t\r\s,.!"`´()\[\]'{}|~]/;
+        const pattern = /[\n\t\r\s,.!"`´()\[\]'{}|~\p{Emoji_Presentation}\p{Extended_Pictographic}]/u;
         return pattern.test(char);
     }
 
@@ -191,63 +180,11 @@ export class LinkerCache {
         if (activeFile === this.activeFilePath && !force) {
             return;
         }
-        // console.log("Updating cache")
         this.cache.updateTree();
-        // this.linkEntries.clear();
 
         this.activeFilePath = activeFile;
-
-        // const includeAllFiles = this.settings.includeAllFiles || this.settings.linkerDirectories.length === 0;
-        // const includeDirPattern = new RegExp(`(^|\/)(${this.settings.linkerDirectories.join("|")})\/`);
-
-        // for (const file of this.vault.getMarkdownFiles()) {
-
-        //     // Skip the active file
-        //     if (file.path === activeFile) {
-        //         continue;
-        //     }
-
-        //     // Skip files that are not in the linker directories
-        //     if (!includeAllFiles && !includeDirPattern.test(file.path)) {
-        //         continue;
-        //     }
-
-        //     const cachedFile = this.files.get(file.path);
-        //     if (cachedFile && cachedFile.mtime === file.stat.mtime) {
-        //         continue;
-        //     }
-
-        //     const metadata = this.app.metadataCache.getFileCache(file);
-        //     const aliases = parseFrontMatterAliases(metadata?.frontmatter);
-        //     const tags = (metadata?.tags || []).map(tag => tag.tag);
-
-        //     const cacheFile = new CachedFile(file.stat.mtime, file, aliases ? aliases : [], tags ? tags : []);
-
-        //     this.files.set(file.path, cacheFile);
-        // }
-
-        // // Update the link entries
-        // for (const file of this.files.values()) {
-        //     this._addEntry(file.file.basename, file);
-        //     for (const alias of file.aliases) {
-        //         this._addEntry(alias, file);
-        //     }
-        //     for (const tag of file.tags) {
-        //         this._addEntry(tag, file);
-        //     }
-        // }
-
-        // console.log("Link entries", this.linkEntries)
     }
 
-    // _addEntry(name: string, file: CachedFile) {
-    //     let entries = this.linkEntries.get(name);
-    //     if (!entries) {
-    //         entries = [];
-    //         this.linkEntries.set(name, entries);
-    //     }
-    //     entries.push(file);
-    // }
 }
 
 
