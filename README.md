@@ -1,6 +1,6 @@
-# Obsidian Glossary Auto Linker Plugin
+# Obsidian Virtual Linker Plugin (Glossary Plugin)
 
-This plugin automatically links occurrences of other notes in your current note.
+This plugin automatically generates virtual links for text within your notes that match with the titles or aliases of other notes in your vault.
 
 Features:
 - create a glossary like functionality
@@ -10,6 +10,7 @@ Features:
 - works with **aliases** of notes
 - links do not appear in graph view & reference counting
 - updates the links automatically while you expand your vault or type new text
+- convert the virtual links to real links in the context menu
 
 Usage demo (literally just typing text ;-):
 ![Demo](media/LinkerDemo.gif)
@@ -27,15 +28,15 @@ If you only want to include notes of a specific folder, you can define this fold
 
 ## Manually installing the plugin
 
-- Copy over `main.js`, `styles.css`, `manifest.json` (find them under `Releases`) to your vault `VaultFolder/.obsidian/plugins/obisidian-glossary/`.
+- Copy over `main.js` & `manifest.json` (find them under `Releases`) to your vault `VaultFolder/.obsidian/plugins/virtual-linker/`.
 
 ## Styling of the links
 
-The links are styled with the class `glossary-link`. 
-You can style them by adding a CSS-snippet at `VaultFolder/.obsidian/snippets/glossary.css` file.
+The links are styled with the class `virtual-link`. 
+You can style them by adding a CSS-snippet at `VaultFolder/.obsidian/snippets/virtualLinks.css` file.
 
 ```css
-.glossary-entry {
+.virtual-link {
     /* E.g. to change the color of all links to red */
     color: red !important;
 
