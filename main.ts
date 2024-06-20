@@ -1,12 +1,12 @@
 import {
 	App,
-	Editor,
 	MarkdownView,
-	Modal,
+	Menu,
 	Notice,
 	Plugin,
 	PluginSettingTab,
 	Setting,
+	TAbstractFile,
 } from "obsidian";
 
 import { GlossaryLinker } from "./glossary/readModeLinker";
@@ -42,6 +42,74 @@ export default class GlossaryLinkerPlugin extends Plugin {
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.addSettingTab(new LinkerSettingTab(this.app, this));
+
+		// Context menu item to convert virtual links to real links
+		this.registerEvent(this.app.workspace.on('file-menu', (menu, file, source) => this.addContextMenuItem(menu, file, source)));
+	}
+
+	addContextMenuItem(menu: Menu, file: TAbstractFile, source: string) {
+		// addContextMenuItem(a: any, b: any, c: any) {
+		// Capture the MouseEvent when the context menu is triggered   // Define a named function to capture the MouseEvent
+
+		const app: App = this.app;
+
+		function contextMenuHandler(event: MouseEvent) {
+			// Access the element that triggered the context menu
+			const targetElement = event.target;
+
+			// Check, if the element has the "virtual-link" class
+			if (targetElement instanceof HTMLElement && targetElement.classList.contains('virtual-link')) {
+				console.log('Virtual Link clicked:', targetElement);
+				menu.addItem((item) => {
+					item.setTitle("[Virtual Linker] Convert to real link")
+						.setIcon("link")
+						.onClick(() => {
+							// Your custom action here
+							new Notice("Custom menu item clicked!");
+
+							// Get from and to position from the element
+							const from = parseInt(targetElement.getAttribute('from') || '-1');
+							const to = parseInt(targetElement.getAttribute('to') || '-1');
+							
+							// Get the shown text
+							const text = targetElement.getAttribute('origin-text') || '';
+							const target = file;
+							const activeFile = app.workspace.getActiveFile();
+							const activeFilePath = activeFile?.path;
+
+
+							// Create the replacement
+							const replacement = `[[${target.path}|${text}]]`;
+							
+							if (!activeFile) {
+								console.error('No active file');
+								return;
+							}
+
+							// Replace the text
+							const editor = app.workspace.getActiveViewOfType(MarkdownView)?.editor;
+							const fromEditorPos = editor?.offsetToPos(from);
+							const toEditorPos = editor?.offsetToPos(to);
+
+							if (!fromEditorPos || !toEditorPos) {
+								console.warn('No editor positions');
+								return;
+							}
+
+							editor?.replaceRange(replacement, fromEditorPos, toEditorPos);
+						});
+				});
+			} else {
+				console.log('No virtual link clicked:', targetElement);
+			}
+
+			// Remove the listener to prevent multiple triggers
+			document.removeEventListener('contextmenu', contextMenuHandler);
+		}
+
+		// Capture the MouseEvent when the context menu is triggered
+		console.log("ADD event listener")
+		document.addEventListener('contextmenu', contextMenuHandler, { once: true });
 	}
 
 	onunload() { }
@@ -72,7 +140,7 @@ class LinkerSettingTab extends PluginSettingTab {
 
 		containerEl.empty();
 
-		containerEl.createEl("h2", { text: "Settings for auto linker / glossary plugin." });
+		containerEl.createEl("h2", { text: "Settings for virtual linker / glossary plugin." });
 
 		new Setting(containerEl)
 			.setName("Include all files")

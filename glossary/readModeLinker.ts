@@ -199,6 +199,8 @@ export class GlossaryLinker extends MarkdownRenderChild {
 							el.setAttribute("data-href", `${linkpath}`);
 							el.classList.add("internal-link");
 							el.classList.add("glossary-entry");
+							el.classList.add("virtual-link");						
+
 							el.target = "_blank";
 							el.rel = "noopener";
 

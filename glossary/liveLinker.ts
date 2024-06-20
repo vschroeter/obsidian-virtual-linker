@@ -18,7 +18,13 @@ import { LinkerCache, PrefixTree } from "./linkerCache";
 
 export class LiveLinkWidget extends WidgetType {
 
-    constructor(public text: string, public linkFile: TFile, public app: App, private settings: GlossaryLinkerPluginSettings) {
+    constructor(
+        public text: string,
+        public linkFile: TFile,
+        public from: number,
+        public to: number,
+        public app: App,
+        private settings: GlossaryLinkerPluginSettings) {
         super();
         // console.log(text, linkFile, app)
     }
@@ -44,7 +50,10 @@ export class LiveLinkWidget extends WidgetType {
         link.textContent = linkText + this.settings.glossarySuffix;
         link.target = "_blank";
         link.rel = "noopener noreferrer";
-        link.classList.add('internal-link', 'glossary-entry');
+        link.setAttribute("from", this.from.toString());
+        link.setAttribute("to", this.to.toString());
+        link.setAttribute("origin-text", this.text);
+        link.classList.add('internal-link', 'glossary-entry', 'virtual-link');
 
         span.appendChild(link);
         return span;
@@ -133,11 +142,14 @@ class AutoLinkerPlugin implements PluginValue {
                         // TODO: Handle multiple files
                         const file = node.files.values().next().value;
 
+                        const aFrom = from + nFrom;
+                        const aTo = from + nTo;
+
                         additions.push({
                             id: id++,
-                            from: from + nFrom,
-                            to: from + nTo,
-                            widget: new LiveLinkWidget(name, file, this.app, this.settings)
+                            from: aFrom,
+                            to: aTo,
+                            widget: new LiveLinkWidget(name, file, aFrom, aTo, this.app, this.settings)
                         });
                     }
                 }
