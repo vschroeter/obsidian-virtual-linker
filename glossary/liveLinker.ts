@@ -197,6 +197,7 @@ class AutoLinkerPlugin implements PluginValue {
                 "codeblock",
                 "code-block",
                 "internal-link",
+                "link"
             ]
 
             syntaxTree(view.state).iterate({
@@ -204,7 +205,7 @@ class AutoLinkerPlugin implements PluginValue {
                 to,
                 enter(node) {
                     const text = view.state.doc.sliceString(node.from, node.to);
-                    // console.log(node, node.type.name, node.from, node.to, text)
+                    // console.log(text, node, node.type.name, node.from, node.to)
 
                     const type = node.type.name;
 
