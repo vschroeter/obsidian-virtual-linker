@@ -12,18 +12,22 @@ import {
 import { GlossaryLinker } from "./glossary/readModeLinker";
 import { liveLinkerPlugin } from "./glossary/liveLinker";
 
+import { promises as fs } from 'fs';
+
 // Remember to rename these classes and interfaces!
 
 export interface GlossaryLinkerPluginSettings {
 	includeAllFiles: boolean;
 	linkerDirectories: string[];
 	glossarySuffix: string;
+	useMarkdownLinks: boolean;
 }
 
 const DEFAULT_SETTINGS: GlossaryLinkerPluginSettings = {
 	includeAllFiles: true,
 	linkerDirectories: ["Glossary"],
 	glossarySuffix: "🔗",
+	useMarkdownLinks: false,
 };
 
 export default class GlossaryLinkerPlugin extends Plugin {
@@ -52,6 +56,7 @@ export default class GlossaryLinkerPlugin extends Plugin {
 		// Capture the MouseEvent when the context menu is triggered   // Define a named function to capture the MouseEvent
 
 		const app: App = this.app;
+		const settings = this.settings;
 
 		function contextMenuHandler(event: MouseEvent) {
 			// Access the element that triggered the context menu
@@ -59,7 +64,7 @@ export default class GlossaryLinkerPlugin extends Plugin {
 
 			// Check, if the element has the "virtual-link" class
 			if (targetElement instanceof HTMLElement && targetElement.classList.contains('virtual-link')) {
-				console.log('Virtual Link clicked:', targetElement);
+				// console.log('Virtual Link clicked:', targetElement);
 				menu.addItem((item) => {
 					item.setTitle("[Virtual Linker] Convert to real link")
 						.setIcon("link")
@@ -70,7 +75,7 @@ export default class GlossaryLinkerPlugin extends Plugin {
 							// Get from and to position from the element
 							const from = parseInt(targetElement.getAttribute('from') || '-1');
 							const to = parseInt(targetElement.getAttribute('to') || '-1');
-							
+
 							// Get the shown text
 							const text = targetElement.getAttribute('origin-text') || '';
 							const target = file;
@@ -79,8 +84,13 @@ export default class GlossaryLinkerPlugin extends Plugin {
 
 
 							// Create the replacement
-							const replacement = `[[${target.path}|${text}]]`;
-							
+							let replacement = "";
+							if (settings.useMarkdownLinks) {
+								replacement = `[${text}](${target.path})`;
+							} else {
+								replacement = `[[${target.path}|${text}]]`;
+							}
+
 							if (!activeFile) {
 								console.error('No active file');
 								return;
@@ -100,7 +110,7 @@ export default class GlossaryLinkerPlugin extends Plugin {
 						});
 				});
 			} else {
-				console.log('No virtual link clicked:', targetElement);
+				// console.log('No virtual link clicked:', targetElement);
 			}
 
 			// Remove the listener to prevent multiple triggers
@@ -108,7 +118,7 @@ export default class GlossaryLinkerPlugin extends Plugin {
 		}
 
 		// Capture the MouseEvent when the context menu is triggered
-		console.log("ADD event listener")
+		// console.log("ADD event listener")
 		document.addEventListener('contextmenu', contextMenuHandler, { once: true });
 	}
 
@@ -120,14 +130,24 @@ export default class GlossaryLinkerPlugin extends Plugin {
 			DEFAULT_SETTINGS,
 			await this.loadData()
 		);
+
+		// Load markdown links from obsidian settings
+		// At the moment obsidian does not provide a clean way to get the settings through an API
+		// So we read the app.json settings file directly
+		const vaultPath = (this.app.vault.adapter as any).basePath
+		const path = vaultPath + "/" + this.app.vault.configDir + '/app.json';
+		const fileContent = await fs.readFile(path, 'utf-8')
+		const appSettings = JSON.parse(fileContent);
+		this.settings.useMarkdownLinks = appSettings.useMarkdownLinks;
+		// console.log("App settings: ", appSettings);
 	}
 
 
 	/** Update plugin settings. */
 	async updateSettings(settings: Partial<GlossaryLinkerPluginSettings> = <Partial<GlossaryLinkerPluginSettings>>{}) {
-		Object.assign(this.settings, settings);
-		await this.saveData(this.settings);
-	}
+			Object.assign(this.settings, settings);
+			await this.saveData(this.settings);
+		}
 }
 
 class LinkerSettingTab extends PluginSettingTab {
