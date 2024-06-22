@@ -17,6 +17,7 @@ import { promises as fs } from 'fs';
 // Remember to rename these classes and interfaces!
 
 export interface GlossaryLinkerPluginSettings {
+	matchOnlyWholeWords: boolean;
 	includeAllFiles: boolean;
 	linkerDirectories: string[];
 	glossarySuffix: string;
@@ -24,6 +25,7 @@ export interface GlossaryLinkerPluginSettings {
 }
 
 const DEFAULT_SETTINGS: GlossaryLinkerPluginSettings = {
+	matchOnlyWholeWords: false,
 	includeAllFiles: true,
 	linkerDirectories: ["Glossary"],
 	glossarySuffix: "🔗",
@@ -162,9 +164,22 @@ class LinkerSettingTab extends PluginSettingTab {
 
 		containerEl.createEl("h2", { text: "Settings for virtual linker / glossary plugin." });
 
+		// Toggle setting to match only whole words or any part of the word
+		new Setting(containerEl)
+			.setName("Match only whole words")
+			.setDesc("If toggled, only whole words will be matched. Otherwise, any part of a word will be matched.")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.matchOnlyWholeWords)
+					.onChange(async (value) => {
+						console.log("Match only whole words: " + value);
+						await this.plugin.updateSettings({ matchOnlyWholeWords: value });
+					})
+			);
+
 		new Setting(containerEl)
 			.setName("Include all files")
-			.setDesc("Include all files for the glossary linker.")
+			.setDesc("Include all files for the virtual linker.")
 			.addToggle((toggle) =>
 				toggle
 					// .setValue(true)

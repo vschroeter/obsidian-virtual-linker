@@ -117,7 +117,7 @@ export class GlossaryLinker extends MarkdownRenderChild {
 							// const char = i < text.length ? text[i] : "\n";
 
 							// If we are at a word boundary, get the current fitting files
-							if (PrefixTree.checkWordBoundary(char)) {
+							if (!this.settings.matchOnlyWholeWords || PrefixTree.checkWordBoundary(char)) {
 								const currentNodes = this.linkerCache.cache.getCurrentMatchNodes(i);
 								if (currentNodes.length > 0) {
 

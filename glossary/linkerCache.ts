@@ -125,7 +125,7 @@ export class PrefixTree {
     pushChar(char: string) {
         const newNodes: PrefixNode[] = [];
         char = char.toLowerCase();
-        if (PrefixTree.checkWordBoundary(char)) {
+        if (!this.settings.matchOnlyWholeWords || PrefixTree.checkWordBoundary(char)) {
             newNodes.push(this.root);
         }
 
@@ -139,7 +139,7 @@ export class PrefixTree {
     }
 
     static checkWordBoundary(char: string): boolean {
-        const pattern = /[\n\t\r\s,.!"`´()\[\]'{}|~\p{Emoji_Presentation}\p{Extended_Pictographic}]/u;
+        const pattern = /[\/\n\t\r\s,.!"`´()\[\]'{}|~\p{Emoji_Presentation}\p{Extended_Pictographic}]/u;
         return pattern.test(char);
     }
 

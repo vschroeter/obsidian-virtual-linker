@@ -129,7 +129,7 @@ class AutoLinkerPlugin implements PluginValue {
                 // console.log(char);
 
                 // If we are at a word boundary, get the current fitting files
-                if (PrefixTree.checkWordBoundary(char)) {
+                if (!this.settings.matchOnlyWholeWords || PrefixTree.checkWordBoundary(char)) {
                     const currentNodes = this.linkerCache.cache.getCurrentMatchNodes(i);
                     if (currentNodes.length > 0) {
 
