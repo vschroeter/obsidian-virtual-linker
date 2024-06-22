@@ -23,6 +23,7 @@ export class LiveLinkWidget extends WidgetType {
         public linkFile: TFile,
         public from: number,
         public to: number,
+        public isSubWord: boolean,
         public app: App,
         private settings: GlossaryLinkerPluginSettings) {
         super();
@@ -47,15 +48,29 @@ export class LiveLinkWidget extends WidgetType {
         const link = document.createElement('a');
 
         link.href = linkHref;
-        link.textContent = linkText + this.settings.glossarySuffix;
+        link.textContent = linkText; // + this.settings.glossarySuffix;
         link.target = "_blank";
         link.rel = "noopener noreferrer";
         link.setAttribute("from", this.from.toString());
         link.setAttribute("to", this.to.toString());
         link.setAttribute("origin-text", this.text);
-        link.classList.add('internal-link', 'glossary-entry', 'virtual-link');
+        // link.classList.add('internal-link', 'glossary-entry', 'virtual-link');
+        link.classList.add('internal-link', 'virtual-link-a');
+        span.classList.add('glossary-entry', 'virtual-link');
 
+        
         span.appendChild(link);
+
+        if ((this.settings.glossarySuffix?.length ?? 0) > 0) {
+            if (!this.isSubWord || !this.settings.suppressSuffixForSubWords) {
+                let icon = document.createElement("sup");
+                icon.textContent = this.settings.glossarySuffix;
+                icon.classList.add("linker-suffix-icon");
+                span.appendChild(icon);
+            }
+        }
+        
+
         return span;
     }
 
@@ -129,7 +144,8 @@ class AutoLinkerPlugin implements PluginValue {
                 // console.log(char);
 
                 // If we are at a word boundary, get the current fitting files
-                if (!this.settings.matchOnlyWholeWords || PrefixTree.checkWordBoundary(char)) {
+                const isWordBoundary = PrefixTree.checkWordBoundary(char);
+                if (!this.settings.matchOnlyWholeWords || isWordBoundary) {
                     const currentNodes = this.linkerCache.cache.getCurrentMatchNodes(i);
                     if (currentNodes.length > 0) {
 
@@ -149,7 +165,7 @@ class AutoLinkerPlugin implements PluginValue {
                             id: id++,
                             from: aFrom,
                             to: aTo,
-                            widget: new LiveLinkWidget(name, file, aFrom, aTo, this.app, this.settings)
+                            widget: new LiveLinkWidget(name, file, aFrom, aTo, !isWordBoundary,this.app, this.settings)
                         });
                     }
                 }

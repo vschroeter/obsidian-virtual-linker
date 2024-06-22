@@ -17,6 +17,7 @@ import { promises as fs } from 'fs';
 // Remember to rename these classes and interfaces!
 
 export interface GlossaryLinkerPluginSettings {
+	suppressSuffixForSubWords: boolean;
 	matchOnlyWholeWords: boolean;
 	includeAllFiles: boolean;
 	linkerDirectories: string[];
@@ -26,6 +27,7 @@ export interface GlossaryLinkerPluginSettings {
 
 const DEFAULT_SETTINGS: GlossaryLinkerPluginSettings = {
 	matchOnlyWholeWords: false,
+	suppressSuffixForSubWords: false,
 	includeAllFiles: true,
 	linkerDirectories: ["Glossary"],
 	glossarySuffix: "🔗",
@@ -63,9 +65,10 @@ export default class GlossaryLinkerPlugin extends Plugin {
 		function contextMenuHandler(event: MouseEvent) {
 			// Access the element that triggered the context menu
 			const targetElement = event.target;
+			// console.log('Context menu event:', event, targetElement);
 
 			// Check, if the element has the "virtual-link" class
-			if (targetElement instanceof HTMLElement && targetElement.classList.contains('virtual-link')) {
+			if (targetElement instanceof HTMLElement && targetElement.classList.contains('virtual-link-a')) {
 				// console.log('Virtual Link clicked:', targetElement);
 				menu.addItem((item) => {
 					item.setTitle("[Virtual Linker] Convert to real link")
@@ -147,9 +150,9 @@ export default class GlossaryLinkerPlugin extends Plugin {
 
 	/** Update plugin settings. */
 	async updateSettings(settings: Partial<GlossaryLinkerPluginSettings> = <Partial<GlossaryLinkerPluginSettings>>{}) {
-			Object.assign(this.settings, settings);
-			await this.saveData(this.settings);
-		}
+		Object.assign(this.settings, settings);
+		await this.saveData(this.settings);
+	}
 }
 
 class LinkerSettingTab extends PluginSettingTab {
@@ -174,8 +177,23 @@ class LinkerSettingTab extends PluginSettingTab {
 					.onChange(async (value) => {
 						console.log("Match only whole words: " + value);
 						await this.plugin.updateSettings({ matchOnlyWholeWords: value });
+						this.display();
 					})
 			);
+		// Toggle setting to suppress suffix for sub words
+		if (!this.plugin.settings.matchOnlyWholeWords) {
+			new Setting(containerEl)
+				.setName("Suppress suffix for sub words")
+				.setDesc("If toggled, the suffix will not be added to links for sub words, but only for complete matches.")
+				.addToggle((toggle) =>
+					toggle
+						.setValue(this.plugin.settings.suppressSuffixForSubWords)
+						.onChange(async (value) => {
+							console.log("Suppress suffix for sub words: " + value);
+							await this.plugin.updateSettings({ suppressSuffixForSubWords: value });
+						})
+				);
+		}
 
 		new Setting(containerEl)
 			.setName("Include all files")
@@ -219,8 +237,8 @@ class LinkerSettingTab extends PluginSettingTab {
 		}
 
 		new Setting(containerEl)
-			.setName("Glossary suffix")
-			.setDesc("The suffix to add to auto generated glossary links.")
+			.setName("Virtual link suffix")
+			.setDesc("The suffix to add to auto generated virtual links.")
 			.addText((text) =>
 				text
 					.setValue(this.plugin.settings.glossarySuffix)

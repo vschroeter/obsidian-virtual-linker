@@ -25,12 +25,33 @@ If you only want to include notes of a specific folder, you can define this fold
 > The auto generated links are post-processed, so they neither change your note text to hard-coded links enclosed in brackets not 
 > appear in the graph view or reference counting.
 
-
 ## Manually installing the plugin
 
 - Copy over `main.js` & `manifest.json` (find them under `Releases`) to your vault `VaultFolder/.obsidian/plugins/virtual-linker/`.
 
-## Styling of the links
+
+## Settings
+
+### Virtual Link Suffix
+
+Any created virtual link will be appended with this suffix. This is useful to distinguish between real and virtual links.
+By default, the suffix is "🔗".
+
+## Matched files
+
+You can toggle the matching of files between:
+- "Match all files": All files in your vault are matched.
+- "Match only files in a specific folder": Only files in a specific folder are matched. You can specify the folder in the settings. This is useful if you want to only create virtual links to notes in a dedicated glossary directory.
+
+### Matching mode
+
+You can toggle the matching mode between:
+- "Matching only whole words": Only whole words are matched. E.g. "Note" will not match "Notebook".
+- "Matching any part of a word": Any part of a word is matched. E.g. "Note" will match "Notebook".
+
+If you choose "Matching any part of a word", you furthermore have the option to suppress the link suffix for these matches to avoid cluttering your text.
+
+### Styling of the links
 
 The links are styled with the class `virtual-link`. 
 You can style them by adding a CSS-snippet at `VaultFolder/.obsidian/snippets/virtualLinks.css` file.
@@ -44,7 +65,6 @@ You can style them by adding a CSS-snippet at `VaultFolder/.obsidian/snippets/vi
     color: var(--link-color) !important;
     filter: brightness(0.6);
 }
-
 ```
 
 ## How to use for development

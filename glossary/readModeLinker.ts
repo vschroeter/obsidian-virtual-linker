@@ -106,18 +106,19 @@ export class GlossaryLinker extends MarkdownRenderChild {
 
 						this.linkerCache.reset();
 
-						const additions: { id: number, from: number, to: number, text: string, file: TFile }[] = [];
+						const additions: { id: number, from: number, to: number, text: string, file: TFile, isSubWord: boolean }[] = [];
 
 						let id = 0;
 						// Iterate over every char in the text
 						for (let i = 0; i <= text.length; i) {
-                			// Do this to get unicode characters as whole chars and not only half of them
+							// Do this to get unicode characters as whole chars and not only half of them
 							const codePoint = text.codePointAt(i)!;
 							const char = i < text.length ? String.fromCodePoint(codePoint) : "\n";
 							// const char = i < text.length ? text[i] : "\n";
 
 							// If we are at a word boundary, get the current fitting files
-							if (!this.settings.matchOnlyWholeWords || PrefixTree.checkWordBoundary(char)) {
+							const isWordBoundary = PrefixTree.checkWordBoundary(char);
+							if (!this.settings.matchOnlyWholeWords || isWordBoundary) {
 								const currentNodes = this.linkerCache.cache.getCurrentMatchNodes(i);
 								if (currentNodes.length > 0) {
 
@@ -135,7 +136,8 @@ export class GlossaryLinker extends MarkdownRenderChild {
 										from: nFrom,
 										to: nTo,
 										text: name,
-										file: file
+										file: file,
+										isSubWord: !isWordBoundary
 									});
 								}
 							}
@@ -191,31 +193,43 @@ export class GlossaryLinker extends MarkdownRenderChild {
 							// console.log("Replacement text: ", replacementText);
 
 							// create link
-							let el = this.containerEl.createEl("a");
+							let span = document.createElement("span");
+							span.classList.add("glossary-entry", "virtual-link");
+
+							let link = this.containerEl.createEl("a");
 							// let el = document.createElement("a");
-							el.text = `${replacementText}` + this.settings.glossarySuffix;
-							el.href = `${linkpath}`;
+							link.text = `${replacementText}`; // + this.settings.glossarySuffix;
+							link.href = `${linkpath}`;
 							// el.setAttribute("data-href", glossaryEntryName);
-							el.setAttribute("data-href", `${linkpath}`);
-							el.classList.add("internal-link");
-							el.classList.add("glossary-entry");
-							el.classList.add("virtual-link");						
+							link.setAttribute("data-href", `${linkpath}`);
+							link.classList.add("internal-link");
+							// link.classList.add("glossary-entry");
+							link.classList.add("virtual-link-a");						
 
-							el.target = "_blank";
-							el.rel = "noopener";
+							link.target = "_blank";
+							link.rel = "noopener";
 
-							// let icon = document.createElement("sup");
-							// icon.textContent = "🔎";
-							// icon.classList.add("glossary-icon");
+							span.appendChild(link);
+
+							if ((this.settings.glossarySuffix?.length ?? 0) > 0) {
+								if ((this.settings.glossarySuffix?.length ?? 0) > 0) {
+									if (!addition.isSubWord || !this.settings.suppressSuffixForSubWords) {
+										let icon = document.createElement("sup");
+										icon.textContent = this.settings.glossarySuffix;
+										icon.classList.add("linker-suffix-icon");
+
+										span.appendChild(icon);
+									}
+								}
+							}
 
 							if (addition.from > 0) {
 								parent?.insertBefore(document.createTextNode(text.slice(lastTo, addition.from)), childNode);
 							}
 
-							// parent?.insertBefore(document.createTextNode(text.slice(0, addition.from)), childNode);
-							parent?.insertBefore(el, childNode);
-							// parent?.insertBefore(icon, childNode);
-							
+
+							parent?.insertBefore(span, childNode);
+
 							lastTo = addition.to;
 						}
 						const textLength = text.length;
