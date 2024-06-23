@@ -9,43 +9,41 @@ import {
 	TAbstractFile,
 } from "obsidian";
 
-import { GlossaryLinker } from "./glossary/readModeLinker";
-import { liveLinkerPlugin } from "./glossary/liveLinker";
+import { GlossaryLinker } from "./linker/readModeLinker";
+import { liveLinkerPlugin } from "./linker/liveLinker";
 
-import { promises as fs } from 'fs';
-
-// Remember to rename these classes and interfaces!
-
-export interface GlossaryLinkerPluginSettings {
+export interface LinkerPluginSettings {
 	suppressSuffixForSubWords: boolean;
 	matchOnlyWholeWords: boolean;
 	includeAllFiles: boolean;
 	linkerDirectories: string[];
 	glossarySuffix: string;
 	useMarkdownLinks: boolean;
+	applyDefaultLinkStyling: boolean;
 }
 
-const DEFAULT_SETTINGS: GlossaryLinkerPluginSettings = {
+const DEFAULT_SETTINGS: LinkerPluginSettings = {
 	matchOnlyWholeWords: false,
 	suppressSuffixForSubWords: false,
 	includeAllFiles: true,
 	linkerDirectories: ["Glossary"],
 	glossarySuffix: "🔗",
 	useMarkdownLinks: false,
+	applyDefaultLinkStyling: true,
 };
 
-export default class GlossaryLinkerPlugin extends Plugin {
-	settings: GlossaryLinkerPluginSettings;
+export default class LinkerPlugin extends Plugin {
+	settings: LinkerPluginSettings;
 
 	async onload() {
 		await this.loadSettings();
 
-		const { vault } = this.app;
-
+		// Register the glossary linker for the read mode
 		this.registerMarkdownPostProcessor((element, context) => {
 			context.addChild(new GlossaryLinker(this.app, this.settings, context, element));
 		});
 
+		// Register the live linker for the live edit mode
 		this.registerEditorExtension(liveLinkerPlugin(this.app, this.settings));
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
@@ -59,24 +57,20 @@ export default class GlossaryLinkerPlugin extends Plugin {
 		// addContextMenuItem(a: any, b: any, c: any) {
 		// Capture the MouseEvent when the context menu is triggered   // Define a named function to capture the MouseEvent
 
+		const that = this;
 		const app: App = this.app;
 		const settings = this.settings;
 
 		function contextMenuHandler(event: MouseEvent) {
 			// Access the element that triggered the context menu
 			const targetElement = event.target;
-			// console.log('Context menu event:', event, targetElement);
 
 			// Check, if the element has the "virtual-link" class
 			if (targetElement instanceof HTMLElement && targetElement.classList.contains('virtual-link-a')) {
-				// console.log('Virtual Link clicked:', targetElement);
 				menu.addItem((item) => {
 					item.setTitle("[Virtual Linker] Convert to real link")
 						.setIcon("link")
 						.onClick(() => {
-							// Your custom action here
-							new Notice("Custom menu item clicked!");
-
 							// Get from and to position from the element
 							const from = parseInt(targetElement.getAttribute('from') || '-1');
 							const to = parseInt(targetElement.getAttribute('to') || '-1');
@@ -114,8 +108,6 @@ export default class GlossaryLinkerPlugin extends Plugin {
 							editor?.replaceRange(replacement, fromEditorPos, toEditorPos);
 						});
 				});
-			} else {
-				// console.log('No virtual link clicked:', targetElement);
 			}
 
 			// Remove the listener to prevent multiple triggers
@@ -123,7 +115,6 @@ export default class GlossaryLinkerPlugin extends Plugin {
 		}
 
 		// Capture the MouseEvent when the context menu is triggered
-		// console.log("ADD event listener")
 		document.addEventListener('contextmenu', contextMenuHandler, { once: true });
 	}
 
@@ -139,24 +130,23 @@ export default class GlossaryLinkerPlugin extends Plugin {
 		// Load markdown links from obsidian settings
 		// At the moment obsidian does not provide a clean way to get the settings through an API
 		// So we read the app.json settings file directly
-		const vaultPath = (this.app.vault.adapter as any).basePath
-		const path = vaultPath + "/" + this.app.vault.configDir + '/app.json';
-		const fileContent = await fs.readFile(path, 'utf-8')
+		// We also Cannot use the vault API because it only reads the vault files not the .obsidian folder 
+		const fileContent = await this.app.vault.adapter.read(this.app.vault.configDir + '/app.json');
 		const appSettings = JSON.parse(fileContent);
 		this.settings.useMarkdownLinks = appSettings.useMarkdownLinks;
-		// console.log("App settings: ", appSettings);
+
 	}
 
 
 	/** Update plugin settings. */
-	async updateSettings(settings: Partial<GlossaryLinkerPluginSettings> = <Partial<GlossaryLinkerPluginSettings>>{}) {
+	async updateSettings(settings: Partial<LinkerPluginSettings> = <Partial<LinkerPluginSettings>>{}) {
 		Object.assign(this.settings, settings);
 		await this.saveData(this.settings);
 	}
 }
 
 class LinkerSettingTab extends PluginSettingTab {
-	constructor(app: App, public plugin: GlossaryLinkerPlugin) {
+	constructor(app: App, public plugin: LinkerPlugin) {
 		super(app, plugin);
 	}
 
@@ -165,17 +155,29 @@ class LinkerSettingTab extends PluginSettingTab {
 
 		containerEl.empty();
 
-		containerEl.createEl("h2", { text: "Settings for virtual linker / glossary plugin." });
+		new Setting(containerEl).setName("Matching behavior").setHeading();
+
+		new Setting(containerEl)
+			.setName("Virtual link suffix")
+			.setDesc("The suffix to add to auto generated virtual links.")
+			.addText((text) =>
+				text
+					.setValue(this.plugin.settings.glossarySuffix)
+					.onChange(async (value) => {
+						// console.log("New glossary suffix: " + value);
+						await this.plugin.updateSettings({ glossarySuffix: value });
+					})
+			);
 
 		// Toggle setting to match only whole words or any part of the word
 		new Setting(containerEl)
 			.setName("Match only whole words")
-			.setDesc("If toggled, only whole words will be matched. Otherwise, any part of a word will be matched.")
+			.setDesc("If activated, only whole words are matched. Otherwise, every part of a word is found.")
 			.addToggle((toggle) =>
 				toggle
 					.setValue(this.plugin.settings.matchOnlyWholeWords)
 					.onChange(async (value) => {
-						console.log("Match only whole words: " + value);
+						// console.log("Match only whole words: " + value);
 						await this.plugin.updateSettings({ matchOnlyWholeWords: value });
 						this.display();
 					})
@@ -184,16 +186,18 @@ class LinkerSettingTab extends PluginSettingTab {
 		if (!this.plugin.settings.matchOnlyWholeWords) {
 			new Setting(containerEl)
 				.setName("Suppress suffix for sub words")
-				.setDesc("If toggled, the suffix will not be added to links for sub words, but only for complete matches.")
+				.setDesc("If activated, the suffix is not added to links for subwords, but only for complete matches.")
 				.addToggle((toggle) =>
 					toggle
 						.setValue(this.plugin.settings.suppressSuffixForSubWords)
 						.onChange(async (value) => {
-							console.log("Suppress suffix for sub words: " + value);
+							// console.log("Suppress suffix for sub words: " + value);
 							await this.plugin.updateSettings({ suppressSuffixForSubWords: value });
 						})
 				);
 		}
+
+		new Setting(containerEl).setName("Matched files").setHeading();
 
 		new Setting(containerEl)
 			.setName("Include all files")
@@ -203,8 +207,7 @@ class LinkerSettingTab extends PluginSettingTab {
 					// .setValue(true)
 					.setValue(this.plugin.settings.includeAllFiles)
 					.onChange(async (value) => {
-						console.log("Include all files: " + value);
-						// this.plugin.settings.includeAllFiles = value;
+						// console.log("Include all files: " + value);
 						await this.plugin.updateSettings({ includeAllFiles: value });
 						this.display();
 					})
@@ -213,7 +216,7 @@ class LinkerSettingTab extends PluginSettingTab {
 		if (!this.plugin.settings.includeAllFiles) {
 			new Setting(containerEl)
 				.setName("Glossary linker directories")
-				.setDesc("Directories to include for the glossary linker (separated by new lines).")
+				.setDesc("Directories to include for the virtual linker (separated by new lines).")
 				.addTextArea((text) => {
 					let setValue = "";
 					try {
@@ -226,27 +229,33 @@ class LinkerSettingTab extends PluginSettingTab {
 						.setValue(setValue)
 						.onChange(async (value) => {
 							this.plugin.settings.linkerDirectories = value.split("\n").map((x) => x.trim()).filter((x) => x.length > 0);
-							console.log("New folder name: " + value, this.plugin.settings.linkerDirectories);
+							// console.log("New folder name: " + value, this.plugin.settings.linkerDirectories);
 							await this.plugin.updateSettings();
 						});
 
-					// Set size
-					text.inputEl.style.width = '300px'
-					text.inputEl.style.height = '100px'
+					// Set default size
+					text.inputEl.addClass('linker-settings-text-box')
 				});
 		}
 
+
+		new Setting(containerEl).setName("Link style").setHeading();
+
+		// Toggle setting to apply default link styling
 		new Setting(containerEl)
-			.setName("Virtual link suffix")
-			.setDesc("The suffix to add to auto generated virtual links.")
-			.addText((text) =>
-				text
-					.setValue(this.plugin.settings.glossarySuffix)
+			.setName("Apply default link styling")
+			.setDesc("If toggled, the default link styling will be applied to virtual links. Furthermore, you can style the links yourself with a CSS-snippet at `VaultFolder/.obsidian/snippets/virtualLinks.css` affecting the class `virtual-link`.")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.applyDefaultLinkStyling)
 					.onChange(async (value) => {
-						console.log("New glossary suffix: " + value);
-						await this.plugin.updateSettings({ glossarySuffix: value });
+						// console.log("Apply default link styling: " + value);
+						await this.plugin.updateSettings({ applyDefaultLinkStyling: value });
 					})
 			);
+
+
+
 	}
 }
 

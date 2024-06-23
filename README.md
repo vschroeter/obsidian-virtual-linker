@@ -53,17 +53,15 @@ If you choose "Matching any part of a word", you furthermore have the option to 
 
 ### Styling of the links
 
-The links are styled with the class `virtual-link`. 
-You can style them by adding a CSS-snippet at `VaultFolder/.obsidian/snippets/virtualLinks.css` file.
+By default (and if the default styling is toggled on in the settings), the links appear a little bit darker than your normal links.
+You can turn off this default styling in the settings.
+
+To apply custom styling to the links, you can add a CSS-snippet at `VaultFolder/.obsidian/snippets/virtualLinks.css` file.
 
 ```css
-.virtual-link {
-    /* E.g. to change the color of all links to red */
+/* E.g. to change the color of all link texts to red */
+.virtual-link a{ 
     color: red !important;
-
-    /* E.g. to show the links in the same color as your normal links but a little bit darker */
-    color: var(--link-color) !important;
-    filter: brightness(0.6);
 }
 ```
 

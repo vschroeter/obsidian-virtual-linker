@@ -10,10 +10,10 @@ import {
     ViewUpdate,
     WidgetType,
 } from "@codemirror/view";
-import { App, getLinkpath, parseFrontMatterAliases, TFile, Vault } from "obsidian";
+import { App, TFile, Vault } from "obsidian";
 
 import IntervalTree from '@flatten-js/interval-tree'
-import { GlossaryLinkerPluginSettings } from "main";
+import { LinkerPluginSettings } from "main";
 import { LinkerCache, PrefixTree } from "./linkerCache";
 
 export class LiveLinkWidget extends WidgetType {
@@ -25,7 +25,7 @@ export class LiveLinkWidget extends WidgetType {
         public to: number,
         public isSubWord: boolean,
         public app: App,
-        private settings: GlossaryLinkerPluginSettings) {
+        private settings: LinkerPluginSettings) {
         super();
         // console.log(text, linkFile, app)
     }
@@ -48,15 +48,17 @@ export class LiveLinkWidget extends WidgetType {
         const link = document.createElement('a');
 
         link.href = linkHref;
-        link.textContent = linkText; // + this.settings.glossarySuffix;
+        link.textContent = linkText;
         link.target = "_blank";
         link.rel = "noopener noreferrer";
         link.setAttribute("from", this.from.toString());
         link.setAttribute("to", this.to.toString());
         link.setAttribute("origin-text", this.text);
-        // link.classList.add('internal-link', 'glossary-entry', 'virtual-link');
         link.classList.add('internal-link', 'virtual-link-a');
         span.classList.add('glossary-entry', 'virtual-link');
+        if (this.settings.applyDefaultLinkStyling) {
+            span.classList.add("virtual-link-default");
+        }
 
         
         span.appendChild(link);
@@ -76,7 +78,6 @@ export class LiveLinkWidget extends WidgetType {
 
     toDOM(view: EditorView): HTMLElement {
         const div = this.createInternalLinkSpan();
-
         return div;
     }
 }
@@ -88,12 +89,12 @@ class AutoLinkerPlugin implements PluginValue {
     vault: Vault;
     linkerCache: LinkerCache;
 
-    settings: GlossaryLinkerPluginSettings;
+    settings: LinkerPluginSettings;
 
     private lastCursorPos: number = 0;
     private lastActiveFile: string = "";
 
-    constructor(view: EditorView, app: App, settings: GlossaryLinkerPluginSettings) {
+    constructor(view: EditorView, app: App, settings: LinkerPluginSettings) {
         this.app = app;
         this.settings = settings;
 
@@ -257,7 +258,7 @@ const pluginSpec: PluginSpec<AutoLinkerPlugin> = {
     decorations: (value: AutoLinkerPlugin) => value.decorations,
 };
 
-export const liveLinkerPlugin = (app: App, settings: GlossaryLinkerPluginSettings) => {
+export const liveLinkerPlugin = (app: App, settings: LinkerPluginSettings) => {
     return ViewPlugin.define((editorView: EditorView) => {
         return (new AutoLinkerPlugin(editorView, app, settings));
     }, pluginSpec)

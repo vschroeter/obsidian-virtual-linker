@@ -1,19 +1,6 @@
-import { syntaxTree } from "@codemirror/language";
-import { RangeSetBuilder } from "@codemirror/state";
-import {
-    Decoration,
-    DecorationSet,
-    EditorView,
-    PluginSpec,
-    PluginValue,
-    ViewPlugin,
-    ViewUpdate,
-    WidgetType,
-} from "@codemirror/view";
-import { App, getLinkpath, parseFrontMatterAliases, TFile, Vault } from "obsidian";
+import { App, parseFrontMatterAliases, TFile, Vault } from "obsidian";
 
-import IntervalTree from '@flatten-js/interval-tree'
-import { GlossaryLinkerPluginSettings } from "main";
+import { LinkerPluginSettings } from "main";
 
 
 export class PrefixNode {
@@ -39,7 +26,7 @@ export class PrefixTree {
     root: PrefixNode = new PrefixNode();
     _currentNodes: PrefixNode[] = [];
 
-    constructor(public app: App, public settings: GlossaryLinkerPluginSettings) {
+    constructor(public app: App, public settings: LinkerPluginSettings) {
         this.updateTree();
     }
 
@@ -158,7 +145,7 @@ export class LinkerCache {
     vault: Vault;
     cache: PrefixTree;
 
-    constructor(public app: App, public settings: GlossaryLinkerPluginSettings) {
+    constructor(public app: App, public settings: LinkerPluginSettings) {
         const { vault } = app;
         this.vault = vault;
         this.cache = new PrefixTree(app, settings);

@@ -3,7 +3,7 @@ import {
 	parseFrontMatterAliases
 } from "obsidian";
 
-import { GlossaryLinkerPluginSettings } from "../main";
+import { LinkerPluginSettings } from "../main";
 import { LinkerCache, PrefixTree } from "./linkerCache";
 
 class GlossaryFile {
@@ -22,12 +22,12 @@ export class GlossaryLinker extends MarkdownRenderChild {
 	text: string;
 	ctx: MarkdownPostProcessorContext;
 	app: App;
-	settings: GlossaryLinkerPluginSettings;
+	settings: LinkerPluginSettings;
 	linkerCache: LinkerCache;
 
 	glossaryFiles: GlossaryFile[] = [];
 
-	constructor(app: App, settings: GlossaryLinkerPluginSettings, context: MarkdownPostProcessorContext, containerEl: HTMLElement) {
+	constructor(app: App, settings: LinkerPluginSettings, context: MarkdownPostProcessorContext, containerEl: HTMLElement) {
 		super(containerEl);
 		this.settings = settings;
 		this.app = app;
@@ -86,7 +86,6 @@ export class GlossaryLinker extends MarkdownRenderChild {
 	onload() {
 		// return;
 		const tags = ["p", "h1", "h2", "h3", "h4", "h5", "h6", "li", "td", "th", "span", "em", "strong"]; //"div"
-		const hasUnicode = (text: string) => (/[^\x00-\x7F]/.test(text))
 
 		for (const tag of tags) {
 			// console.log("Tag: ", tag);
@@ -114,7 +113,6 @@ export class GlossaryLinker extends MarkdownRenderChild {
 							// Do this to get unicode characters as whole chars and not only half of them
 							const codePoint = text.codePointAt(i)!;
 							const char = i < text.length ? String.fromCodePoint(codePoint) : "\n";
-							// const char = i < text.length ? text[i] : "\n";
 
 							// If we are at a word boundary, get the current fitting files
 							const isWordBoundary = PrefixTree.checkWordBoundary(char);
@@ -195,6 +193,9 @@ export class GlossaryLinker extends MarkdownRenderChild {
 							// create link
 							let span = document.createElement("span");
 							span.classList.add("glossary-entry", "virtual-link");
+							if (this.settings.applyDefaultLinkStyling) {
+								span.classList.add("virtual-link-default");
+							}
 
 							let link = this.containerEl.createEl("a");
 							// let el = document.createElement("a");
@@ -240,10 +241,7 @@ export class GlossaryLinker extends MarkdownRenderChild {
 						childNodeIndex += 1;
 					}
 				}
-				// }
 			}
-
-			// this.containerEl.replaceWith(this.containerEl);
 		}
 	}
 }

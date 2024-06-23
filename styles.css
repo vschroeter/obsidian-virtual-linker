@@ -7,6 +7,15 @@ If your plugin does not need CSS, delete this file.
 
 */
 
+.virtual-link-default {
+    filter: brightness(0.6);
+}
+
 .linker-suffix-icon {
     user-select: none;
+}
+
+.linker-settings-text-box {
+    min-width: 200px;
+    min-height: 60px;
 }
