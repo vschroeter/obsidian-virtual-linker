@@ -214,8 +214,12 @@ class AutoLinkerPlugin implements PluginValue {
                 "codeblock",
                 "code-block",
                 "internal-link",
-                "link"
+                "link",
             ]
+
+            if (!this.settings.includeHeaders) {
+                excludedTypes.push("header-")
+            }
 
             syntaxTree(view.state).iterate({
                 from,

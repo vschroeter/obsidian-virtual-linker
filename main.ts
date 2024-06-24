@@ -20,6 +20,7 @@ export interface LinkerPluginSettings {
 	glossarySuffix: string;
 	useMarkdownLinks: boolean;
 	applyDefaultLinkStyling: boolean;
+	includeHeaders: boolean
 }
 
 const DEFAULT_SETTINGS: LinkerPluginSettings = {
@@ -30,6 +31,7 @@ const DEFAULT_SETTINGS: LinkerPluginSettings = {
 	glossarySuffix: "🔗",
 	useMarkdownLinks: false,
 	applyDefaultLinkStyling: true,
+	includeHeaders: true
 };
 
 export default class LinkerPlugin extends Plugin {
@@ -196,6 +198,19 @@ class LinkerSettingTab extends PluginSettingTab {
 						})
 				);
 		}
+
+		// If headers should be matched or not
+		new Setting(containerEl)
+			.setName("Include headers")
+			.setDesc("If activated, headers (so your lines beginning with at least one `#`) are included for virtual links.")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.includeHeaders)
+					.onChange(async (value) => {
+						// console.log("Include headers: " + value);
+						await this.plugin.updateSettings({ includeHeaders: value });
+					})
+			);
 
 		new Setting(containerEl).setName("Matched files").setHeading();
 
