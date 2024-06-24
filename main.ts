@@ -20,7 +20,12 @@ export interface LinkerPluginSettings {
 	glossarySuffix: string;
 	useMarkdownLinks: boolean;
 	applyDefaultLinkStyling: boolean;
-	includeHeaders: boolean
+	includeHeaders: boolean,
+	matchCaseSensitive: boolean;
+	tagToIgnoreCase: string;
+	tagToMatchCase: string;
+	tagToExcludeFile: string;
+	tagToIncludeFile: string;
 }
 
 const DEFAULT_SETTINGS: LinkerPluginSettings = {
@@ -31,7 +36,12 @@ const DEFAULT_SETTINGS: LinkerPluginSettings = {
 	glossarySuffix: "🔗",
 	useMarkdownLinks: false,
 	applyDefaultLinkStyling: true,
-	includeHeaders: true
+	includeHeaders: true,
+	matchCaseSensitive: false,
+	tagToIgnoreCase: "linker-ignore-case",
+	tagToMatchCase: "linker-match-case",
+	tagToExcludeFile: "linker-exclude",
+	tagToIncludeFile: "linker-include"
 };
 
 export default class LinkerPlugin extends Plugin {
@@ -171,6 +181,62 @@ class LinkerSettingTab extends PluginSettingTab {
 					})
 			);
 
+		// Toggle setting for case sensitivity
+		new Setting(containerEl)
+			.setName("Case sensitive")
+			.setDesc("If activated, the matching is case sensitive.")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.matchCaseSensitive)
+					.onChange(async (value) => {
+						// console.log("Case sensitive: " + value);
+						await this.plugin.updateSettings({ matchCaseSensitive: value });
+						this.display();
+					})
+			);
+
+		if (this.plugin.settings.matchCaseSensitive) {
+			// Text setting for tag to ignore case
+			new Setting(containerEl)
+				.setName("Tag to ignore case")
+				.setDesc("By adding this tag to a file, the linker will ignore the case for the file.")
+				.addText((text) =>
+					text
+						.setValue(this.plugin.settings.tagToIgnoreCase)
+						.onChange(async (value) => {
+							// console.log("New tag to ignore case: " + value);
+							await this.plugin.updateSettings({ tagToIgnoreCase: value });
+						})
+				);
+		} else {
+			// Text setting for tag to match case
+			new Setting(containerEl)
+				.setName("Tag to match case")
+				.setDesc("By adding this tag to a file, the linker will match the case for the file.")
+				.addText((text) =>
+					text
+						.setValue(this.plugin.settings.tagToMatchCase)
+						.onChange(async (value) => {
+							// console.log("New tag to match case: " + value);
+							await this.plugin.updateSettings({ tagToMatchCase: value });
+						})
+				);
+		}
+
+
+		// If headers should be matched or not
+		new Setting(containerEl)
+			.setName("Include headers")
+			.setDesc("If activated, headers (so your lines beginning with at least one `#`) are included for virtual links.")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.includeHeaders)
+					.onChange(async (value) => {
+						// console.log("Include headers: " + value);
+						await this.plugin.updateSettings({ includeHeaders: value });
+					})
+			);
+
 		// Toggle setting to match only whole words or any part of the word
 		new Setting(containerEl)
 			.setName("Match only whole words")
@@ -199,18 +265,6 @@ class LinkerSettingTab extends PluginSettingTab {
 				);
 		}
 
-		// If headers should be matched or not
-		new Setting(containerEl)
-			.setName("Include headers")
-			.setDesc("If activated, headers (so your lines beginning with at least one `#`) are included for virtual links.")
-			.addToggle((toggle) =>
-				toggle
-					.setValue(this.plugin.settings.includeHeaders)
-					.onChange(async (value) => {
-						// console.log("Include headers: " + value);
-						await this.plugin.updateSettings({ includeHeaders: value });
-					})
-			);
 
 		new Setting(containerEl).setName("Matched files").setHeading();
 
@@ -252,6 +306,36 @@ class LinkerSettingTab extends PluginSettingTab {
 					text.inputEl.addClass('linker-settings-text-box')
 				});
 		}
+
+		if (!this.plugin.settings.includeAllFiles) {
+			// Text setting for tag to include file
+			new Setting(containerEl)
+				.setName("Tag to include file")
+				.setDesc("Tag to explicitly include the file for the linker.")
+				.addText((text) =>
+					text
+						.setValue(this.plugin.settings.tagToIncludeFile)
+						.onChange(async (value) => {
+							// console.log("New tag to include file: " + value);
+							await this.plugin.updateSettings({ tagToIncludeFile: value });
+						})
+				);
+		}
+
+
+		// Text setting for tag to ignore file
+		new Setting(containerEl)
+			.setName("Tag to ignore file")
+			.setDesc("Tag to ignore the file for the linker.")
+			.addText((text) =>
+				text
+					.setValue(this.plugin.settings.tagToExcludeFile)
+					.onChange(async (value) => {
+						// console.log("New tag to ignore file: " + value);
+						await this.plugin.updateSettings({ tagToExcludeFile: value });
+					})
+			);
+
 
 
 		new Setting(containerEl).setName("Link style").setHeading();

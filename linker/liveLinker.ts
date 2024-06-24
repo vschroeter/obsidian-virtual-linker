@@ -157,7 +157,7 @@ class AutoLinkerPlugin implements PluginValue {
                         const name = text.slice(nFrom, nTo);
 
                         // TODO: Handle multiple files
-                        const file = node.files.values().next().value;
+                        const file: TFile = node.files.values().next().value;
 
                         const aFrom = from + nFrom;
                         const aTo = from + nTo;

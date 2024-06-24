@@ -85,7 +85,10 @@ export class GlossaryLinker extends MarkdownRenderChild {
 
 	onload() {
 		// return;
-		const tags = ["p", "h1", "h2", "h3", "h4", "h5", "h6", "li", "td", "th", "span", "em", "strong"]; //"div"
+		const tags = ["p", "li", "td", "th", "span", "em", "strong"]; //"div"
+		if (this.settings.includeHeaders) {
+			tags.push("h1", "h2", "h3", "h4", "h5", "h6");
+		}
 
 		for (const tag of tags) {
 			// console.log("Tag: ", tag);
