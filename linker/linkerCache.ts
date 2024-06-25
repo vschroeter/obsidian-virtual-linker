@@ -92,10 +92,12 @@ export class PrefixTree {
             // const tags = (metadata?.tags || []).map(tag => tag.tag);
 
 
-            const names = [file.basename] // 
+            let names = [file.basename] // 
             if (aliases) {
                 names.push(...aliases);
             }
+
+            names = names.filter(name => name && name.trim().length > 0);
 
             // console.log(aliases, tags, names);
 
