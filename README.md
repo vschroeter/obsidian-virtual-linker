@@ -43,6 +43,16 @@ You can toggle the matching of files between:
 - "Match all files": All files in your vault are matched.
 - "Match only files in a specific folder": Only files in a specific folder are matched. You can specify the folder in the settings. This is useful if you want to only create virtual links to notes in a dedicated glossary directory.
 
+Furthermore, you can explicitly include or exclude specific files from being matched, by adding a tag to the file. You can change the tag in the settings, by default it is:
+- `linker-include` to explicitly include a file
+- `linker-exclude` to explicitly exclude a file
+
+### Case sensitivity
+You can toggle the case sensitivity of the matching. By default, the matching is case insensitive.
+You can also explicitly change the case sensitivity of a specific file by adding a tag to the file. You can change the tag in the settings, by default it is:
+- `linker-match-case` to make the matching case sensitive
+- `linker-ignore-case` to make the matching case insensitive
+
 ### Matching mode
 
 You can toggle the matching mode between:

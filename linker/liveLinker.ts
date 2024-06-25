@@ -157,7 +157,7 @@ class AutoLinkerPlugin implements PluginValue {
                         const name = text.slice(nFrom, nTo);
 
                         // TODO: Handle multiple files
-                        const file = node.files.values().next().value;
+                        const file: TFile = node.files.values().next().value;
 
                         const aFrom = from + nFrom;
                         const aTo = from + nTo;
@@ -214,8 +214,12 @@ class AutoLinkerPlugin implements PluginValue {
                 "codeblock",
                 "code-block",
                 "internal-link",
-                "link"
+                "link",
             ]
+
+            if (!this.settings.includeHeaders) {
+                excludedTypes.push("header-")
+            }
 
             syntaxTree(view.state).iterate({
                 from,

@@ -49,8 +49,9 @@ export class PrefixTree {
 
     addFile(name: string, file: TFile) {
         let node = this.root;
+
         for (let char of name) {
-            char = char.toLowerCase();
+            // char = char.toLowerCase();
             let child = node.children.get(char);
             if (!child) {
                 child = new PrefixNode();
@@ -70,26 +71,62 @@ export class PrefixTree {
         const includeDirPattern = new RegExp(`(^|\/)(${this.settings.linkerDirectories.join("|")})\/`);
 
         for (const file of this.app.vault.getMarkdownFiles()) {
+
+            // Get the tags of the file
+            const tags = this.app.metadataCache.getFileCache(file)?.frontmatter?.tags ?? [];
+            const includeFile = tags.includes(this.settings.tagToIncludeFile);
+            const excludeFile = tags.includes(this.settings.tagToExcludeFile);
+
+            if (excludeFile) {
+                continue;
+            }
+
             // Skip files that are not in the linker directories
-            if (!includeAllFiles && !includeDirPattern.test(file.path)) {
+            if (!includeFile && !includeAllFiles && !includeDirPattern.test(file.path)) {
                 continue;
             }
 
             const metadata = this.app.metadataCache.getFileCache(file);
-            const aliases = parseFrontMatterAliases(metadata?.frontmatter);
-            const tags = (metadata?.tags || []).map(tag => tag.tag);
+            // const aliases = parseFrontMatterAliases(metadata?.frontmatter);
+            const aliases = metadata?.frontmatter?.aliases ?? [];
+            // const tags = (metadata?.tags || []).map(tag => tag.tag);
 
-            this.addFile(file.basename, file);
+
+            const names = [file.basename] // 
             if (aliases) {
-                for (const alias of aliases) {
-                    this.addFile(alias, file);
+                names.push(...aliases);
+            }
+
+            // console.log(aliases, tags, names);
+
+            // Check if the file should match case sensitive
+            if (this.settings.matchCaseSensitive) {
+                if (tags.includes(this.settings.tagToIgnoreCase)) {
+                    const lowerCaseNames = names.map(name => name.toLowerCase());
+                    names.push(...lowerCaseNames);
+                }
+            } else {
+                if (!tags.includes(this.settings.tagToMatchCase)) {
+                    const lowerCaseNames = names.map(name => name.toLowerCase());
+                    names.push(...lowerCaseNames);
                 }
             }
-            if (tags) {
-                for (const tag of tags) {
-                    this.addFile(tag, file);
-                }
+
+            for (const name of names) {
+                this.addFile(name, file);
             }
+
+            // this.addFile(file.basename, file);
+            // if (aliases) {
+            //     for (const alias of aliases) {
+            //         this.addFile(alias, file);
+            //     }
+            // }
+            // if (tags) {
+            //     for (const tag of tags) {
+            //         this.addFile(tag, file);
+            //     }
+            // }
         }
     }
 
@@ -111,17 +148,24 @@ export class PrefixTree {
 
     pushChar(char: string) {
         const newNodes: PrefixNode[] = [];
-        char = char.toLowerCase();
-        if (!this.settings.matchOnlyWholeWords || PrefixTree.checkWordBoundary(char)) {
-            newNodes.push(this.root);
+        const chars = [char]
+        if (!this.settings.matchCaseSensitive) {
+            chars.push(char.toLowerCase());
         }
 
-        for (const node of this._currentNodes) {
-            const child = node.children.get(char);
-            if (child) {
-                newNodes.push(child);
+        chars.forEach(c => {
+            // char = char.toLowerCase();
+            if (!this.settings.matchOnlyWholeWords || PrefixTree.checkWordBoundary(c)) {
+                newNodes.push(this.root);
             }
-        }
+    
+            for (const node of this._currentNodes) {
+                const child = node.children.get(c);
+                if (child) {
+                    newNodes.push(child);
+                }
+            }
+        });
         this._currentNodes = newNodes;
     }
 
