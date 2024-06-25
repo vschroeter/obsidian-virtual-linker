@@ -244,7 +244,7 @@ class LinkerSettingTab extends PluginSettingTab {
 		// Toggle setting to apply default link styling
 		new Setting(containerEl)
 			.setName("Apply default link styling")
-			.setDesc("If toggled, the default link styling will be applied to virtual links. Furthermore, you can style the links yourself with a CSS-snippet at `VaultFolder/.obsidian/snippets/virtualLinks.css` affecting the class `virtual-link`.")
+			.setDesc("If toggled, the default link styling will be applied to virtual links. Furthermore, you can style the links yourself with a CSS-snippet affecting the class `virtual-link`. (Find the CSS snippet directory at Appearance -> CSS Snippets -> Open snippets folder)")
 			.addToggle((toggle) =>
 				toggle
 					.setValue(this.plugin.settings.applyDefaultLinkStyling)
