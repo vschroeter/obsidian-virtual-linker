@@ -1,6 +1,5 @@
 import {
-	App, getLinkpath, MarkdownPostProcessorContext, MarkdownRenderChild, TFile,
-	parseFrontMatterAliases
+	App, getLinkpath, MarkdownPostProcessorContext, MarkdownRenderChild, TFile
 } from "obsidian";
 
 import { LinkerPluginSettings } from "../main";
@@ -25,7 +24,6 @@ export class GlossaryLinker extends MarkdownRenderChild {
 	settings: LinkerPluginSettings;
 	linkerCache: LinkerCache;
 
-	glossaryFiles: GlossaryFile[] = [];
 
 	constructor(app: App, settings: LinkerPluginSettings, context: MarkdownPostProcessorContext, containerEl: HTMLElement) {
 		super(containerEl);
@@ -35,29 +33,10 @@ export class GlossaryLinker extends MarkdownRenderChild {
 
 		this.linkerCache = new LinkerCache(app, settings);
 
-		this.glossaryFiles = this.getGlossaryFiles();
-
 		// TODO: Fix this?
 		// If not called, sometimes (especially for lists) elements are added to the context after they already have been loaded
 		// within the parent element. This causes the already added links to be removed...?
 		this.load();
-	}
-
-	getGlossaryFiles(): GlossaryFile[] {
-		const includeAllFiles = this.settings.includeAllFiles || this.settings.linkerDirectories.length === 0;
-		const includeDirPattern = new RegExp(`(^|\/)(${this.settings.linkerDirectories.join("|")})\/`);
-		const files = this.app.vault.getMarkdownFiles().filter((file) => {
-			if (includeAllFiles) return true;
-			return includeDirPattern.test(file.path) && this.ctx.sourcePath != file.path
-		});
-
-		let gFiles = files.map((file) => {
-			let aliases = parseFrontMatterAliases(this.app.metadataCache.getFileCache(file)?.frontmatter)
-			return new GlossaryFile(file, aliases ? aliases : []);
-		});
-
-		// Sort the files by their name length
-		return gFiles.sort((a, b) => b.name.length - a.name.length);
 	}
 
 	getClosestLinkPath(glossaryName: string): TFile | null {
@@ -208,7 +187,7 @@ export class GlossaryLinker extends MarkdownRenderChild {
 							link.setAttribute("data-href", `${linkpath}`);
 							link.classList.add("internal-link");
 							// link.classList.add("glossary-entry");
-							link.classList.add("virtual-link-a");						
+							link.classList.add("virtual-link-a");
 
 							link.target = "_blank";
 							link.rel = "noopener";

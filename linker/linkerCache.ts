@@ -73,7 +73,10 @@ export class PrefixTree {
         for (const file of this.app.vault.getMarkdownFiles()) {
 
             // Get the tags of the file
-            const tags = this.app.metadataCache.getFileCache(file)?.frontmatter?.tags ?? [];
+            const frontmatterTags = this.app.metadataCache.getFileCache(file)?.frontmatter?.tags ?? [];
+            const inlineTags = (this.app.metadataCache.getFileCache(file)?.tags ?? []).map(tag => tag.tag).map(tag => tag.startsWith("#") ? tag.slice(1) : tag);
+            const tags = [...frontmatterTags, ...inlineTags].filter(tag => tag && tag.trim().length > 0);
+
             const includeFile = tags.includes(this.settings.tagToIncludeFile);
             const excludeFile = tags.includes(this.settings.tagToExcludeFile);
 
@@ -160,7 +163,7 @@ export class PrefixTree {
             if (!this.settings.matchOnlyWholeWords || PrefixTree.checkWordBoundary(c)) {
                 newNodes.push(this.root);
             }
-    
+
             for (const node of this._currentNodes) {
                 const child = node.children.get(c);
                 if (child) {
@@ -199,7 +202,7 @@ export class LinkerCache {
 
     }
 
-    reset() { 
+    reset() {
         this.cache.resetSearch();
     }
 
