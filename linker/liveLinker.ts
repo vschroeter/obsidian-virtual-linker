@@ -141,26 +141,26 @@ class AutoLinkerPlugin implements PluginValue {
                 const codePoint = text.codePointAt(i)!;
                 const char = i < text.length ? String.fromCodePoint(codePoint) : "\n";
 
-                // const char = i < text.length ? text[i] : "\n";
-                // console.log(char);
-
                 // If we are at a word boundary, get the current fitting files
                 const isWordBoundary = PrefixTree.checkWordBoundary(char);
                 if (!this.settings.matchOnlyWholeWords || isWordBoundary) {
                     const currentNodes = this.linkerCache.cache.getCurrentMatchNodes(i);
                     if (currentNodes.length > 0) {
-
+                        
+                        
                         // TODO: Handle multiple matches
                         const node = currentNodes[0];
                         const nFrom = node.start;
                         const nTo = node.end;
                         const name = text.slice(nFrom, nTo);
-
+                        
                         // TODO: Handle multiple files
                         const file: TFile = node.files.values().next().value;
-
+                        
                         const aFrom = from + nFrom;
                         const aTo = from + nTo;
+                        
+                        console.log(currentNodes, node.files)
 
                         additions.push({
                             id: id++,
@@ -184,6 +184,8 @@ class AutoLinkerPlugin implements PluginValue {
                 }
                 return a.from - b.from
             });
+
+
 
             // Delete additions that overlap
             // Additions are sorted by from position and after that by length, we want to keep longer additions
@@ -225,7 +227,7 @@ class AutoLinkerPlugin implements PluginValue {
                 from,
                 to,
                 enter(node) {
-                    const text = view.state.doc.sliceString(node.from, node.to);
+                    // const text = view.state.doc.sliceString(node.from, node.to);
                     // console.log(text, node, node.type.name, node.from, node.to)
 
                     const type = node.type.name;

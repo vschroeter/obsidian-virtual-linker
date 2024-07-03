@@ -1,4 +1,4 @@
-import { App, parseFrontMatterAliases, TFile, Vault } from "obsidian";
+import { App, getAllTags, parseFrontMatterAliases, TFile, Vault } from "obsidian";
 
 import { LinkerPluginSettings } from "main";
 
@@ -33,6 +33,7 @@ export class PrefixTree {
     getCurrentMatchNodes(index: number): MatchNode[] {
         const matchNodes: MatchNode[] = [];
 
+        // From the current nodes in the trie, get all nodes that have files
         for (const node of this._currentNodes) {
             if (node.files.size === 0) {
                 continue;
@@ -44,12 +45,17 @@ export class PrefixTree {
             matchNode.value = node.value;
             matchNodes.push(matchNode);
         }
+
+        // Sort nodes by length
+        matchNodes.sort((a, b) => b.length - a.length);
+
         return matchNodes;
     }
 
     addFile(name: string, file: TFile) {
         let node = this.root;
 
+        // For each character in the name, add a node to the trie
         for (let char of name) {
             // char = char.toLowerCase();
             let child = node.children.get(char);
@@ -62,6 +68,8 @@ export class PrefixTree {
             }
             node = child;
         }
+
+        // The last node is a leaf node, add the file to the node
         node.files.add(file);
     }
 
@@ -73,9 +81,10 @@ export class PrefixTree {
         for (const file of this.app.vault.getMarkdownFiles()) {
 
             // Get the tags of the file
-            const frontmatterTags = this.app.metadataCache.getFileCache(file)?.frontmatter?.tags ?? [];
-            const inlineTags = (this.app.metadataCache.getFileCache(file)?.tags ?? []).map(tag => tag.tag).map(tag => tag.startsWith("#") ? tag.slice(1) : tag);
-            const tags = [...frontmatterTags, ...inlineTags].filter(tag => tag && tag.trim().length > 0);
+            // and normalize them by removing the # in front of tags
+            const tags = (getAllTags(this.app.metadataCache.getFileCache(file)!!) ?? [])
+                    .filter(tag => tag.trim().length > 0)
+                    .map(tag => tag.startsWith("#") ? tag.slice(1) : tag);
 
             const includeFile = tags.includes(this.settings.tagToIncludeFile);
             const excludeFile = tags.includes(this.settings.tagToExcludeFile);
@@ -90,9 +99,7 @@ export class PrefixTree {
             }
 
             const metadata = this.app.metadataCache.getFileCache(file);
-            // const aliases = parseFrontMatterAliases(metadata?.frontmatter);
             const aliases = metadata?.frontmatter?.aliases ?? [];
-            // const tags = (metadata?.tags || []).map(tag => tag.tag);
 
 
             let names = [file.basename] // 
@@ -167,7 +174,9 @@ export class PrefixTree {
             for (const node of this._currentNodes) {
                 const child = node.children.get(c);
                 if (child) {
-                    newNodes.push(child);
+                    if (!newNodes.includes(child)) {
+                        newNodes.push(child);
+                    }
                 }
             }
         });
