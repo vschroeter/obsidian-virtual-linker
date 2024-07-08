@@ -125,6 +125,7 @@ class AutoLinkerPlugin implements PluginValue {
 
     buildDecorations(view: EditorView): DecorationSet {
         const builder = new RangeSetBuilder<Decoration>();
+        const currentFile = this.app.workspace.getActiveFile();
 
         for (let { from, to } of view.visibleRanges) {
 
@@ -144,9 +145,8 @@ class AutoLinkerPlugin implements PluginValue {
                 // If we are at a word boundary, get the current fitting files
                 const isWordBoundary = PrefixTree.checkWordBoundary(char);
                 if (!this.settings.matchOnlyWholeWords || isWordBoundary) {
-                    const currentNodes = this.linkerCache.cache.getCurrentMatchNodes(i);
+                    const currentNodes = this.linkerCache.cache.getCurrentMatchNodes(i, currentFile);
                     if (currentNodes.length > 0) {
-                        
                         
                         // TODO: Handle multiple matches
                         const node = currentNodes[0];
@@ -159,8 +159,6 @@ class AutoLinkerPlugin implements PluginValue {
                         
                         const aFrom = from + nFrom;
                         const aTo = from + nTo;
-                        
-                        console.log(currentNodes, node.files)
 
                         additions.push({
                             id: id++,

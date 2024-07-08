@@ -30,7 +30,7 @@ export class PrefixTree {
         this.updateTree();
     }
 
-    getCurrentMatchNodes(index: number): MatchNode[] {
+    getCurrentMatchNodes(index: number, excludedNote?: TFile | null): MatchNode[] {
         const matchNodes: MatchNode[] = [];
 
         // From the current nodes in the trie, get all nodes that have files
@@ -41,9 +41,11 @@ export class PrefixTree {
             const matchNode = new MatchNode();
             matchNode.length = node.value.length;
             matchNode.start = index - matchNode.length;
-            matchNode.files = node.files;
+            matchNode.files = new Set(Array.from(node.files).filter(file => !excludedNote || file.path !== excludedNote.path));;
             matchNode.value = node.value;
-            matchNodes.push(matchNode);
+            if (matchNode.files.size > 0) {
+                matchNodes.push(matchNode);
+            }
         }
 
         // Sort nodes by length
