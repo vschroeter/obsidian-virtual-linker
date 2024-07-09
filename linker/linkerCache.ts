@@ -1,7 +1,30 @@
 import { App, getAllTags, parseFrontMatterAliases, TFile, Vault } from "obsidian";
 
 import { LinkerPluginSettings } from "main";
+import { LinkerMetaInfoFetcher } from "./linkerInfo";
 
+
+export class ExternalUpdateManager {
+
+    registeredCallbacks: Set<Function> = new Set();
+
+    constructor() {
+    }
+
+    registerCallback(callback: Function) {
+        this.registeredCallbacks.add(callback);
+    }
+
+    update() {
+        // Timeout to make sure the cache is updated
+        setTimeout(() => {
+            for (const callback of this.registeredCallbacks) {
+                callback();
+            }
+        }, 50);
+    }
+
+}
 
 export class PrefixNode {
     parent: PrefixNode | undefined;
@@ -32,6 +55,12 @@ export class PrefixTree {
 
     getCurrentMatchNodes(index: number, excludedNote?: TFile | null): MatchNode[] {
         const matchNodes: MatchNode[] = [];
+
+        if (!excludedNote && this.settings.excludeLinksToActiveFile) {
+            excludedNote = this.app.workspace.getActiveFile();
+        } else {
+            excludedNote = null;
+        }
 
         // From the current nodes in the trie, get all nodes that have files
         for (const node of this._currentNodes) {
@@ -77,26 +106,40 @@ export class PrefixTree {
 
     updateTree() {
         this.root = new PrefixNode();
-        const includeAllFiles = this.settings.includeAllFiles || this.settings.linkerDirectories.length === 0;
-        const includeDirPattern = new RegExp(`(^|\/)(${this.settings.linkerDirectories.join("|")})\/`);
+        const fetcher = new LinkerMetaInfoFetcher(this.app, this.settings);
 
         for (const file of this.app.vault.getMarkdownFiles()) {
+
+            const metaInfo = fetcher.getMetaInfo(file);
 
             // Get the tags of the file
             // and normalize them by removing the # in front of tags
             const tags = (getAllTags(this.app.metadataCache.getFileCache(file)!!) ?? [])
                     .filter(tag => tag.trim().length > 0)
-                    .map(tag => tag.startsWith("#") ? tag.slice(1) : tag);
+                .map(tag => tag.startsWith("#") ? tag.slice(1) : tag);
+                
+            const includeFile = metaInfo.includeFile;
+            const excludeFile = metaInfo.excludeFile;
 
-            const includeFile = tags.includes(this.settings.tagToIncludeFile);
-            const excludeFile = tags.includes(this.settings.tagToExcludeFile);
+            const isInIncludedDir = metaInfo.isInIncludedDir;
+            const isInExcludedDir = metaInfo.isInExcludedDir;
 
-            if (excludeFile) {
+            // console.log({
+            //     file: file.path,
+            //     tags: tags,
+            //     includeFile,
+            //     excludeFile,
+            //     isInIncludedDir,
+            //     isInExcludedDir,
+            //     includeAllFiles: metaInfo.includeAllFiles
+            // });
+
+            if (excludeFile || (isInExcludedDir && !includeFile)) {
                 continue;
             }
 
             // Skip files that are not in the linker directories
-            if (!includeFile && !includeAllFiles && !includeDirPattern.test(file.path)) {
+            if (!includeFile && !isInIncludedDir && !metaInfo.includeAllFiles) {
                 continue;
             }
 
@@ -129,18 +172,6 @@ export class PrefixTree {
             for (const name of names) {
                 this.addFile(name, file);
             }
-
-            // this.addFile(file.basename, file);
-            // if (aliases) {
-            //     for (const alias of aliases) {
-            //         this.addFile(alias, file);
-            //     }
-            // }
-            // if (tags) {
-            //     for (const tag of tags) {
-            //         this.addFile(tag, file);
-            //     }
-            // }
         }
     }
 

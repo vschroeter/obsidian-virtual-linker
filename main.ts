@@ -2,21 +2,24 @@ import {
 	App,
 	MarkdownView,
 	Menu,
-	Notice,
 	Plugin,
 	PluginSettingTab,
 	Setting,
 	TAbstractFile,
+	TFolder,
 } from "obsidian";
 
 import { GlossaryLinker } from "./linker/readModeLinker";
 import { liveLinkerPlugin } from "./linker/liveLinker";
+import { ExternalUpdateManager } from "linker/linkerCache";
+import { LinkerMetaInfoFetcher } from "linker/linkerInfo";
 
 export interface LinkerPluginSettings {
 	suppressSuffixForSubWords: boolean;
 	matchOnlyWholeWords: boolean;
 	includeAllFiles: boolean;
 	linkerDirectories: string[];
+	excludedDirectories: string[];
 	glossarySuffix: string;
 	useMarkdownLinks: boolean;
 	applyDefaultLinkStyling: boolean;
@@ -26,6 +29,7 @@ export interface LinkerPluginSettings {
 	tagToMatchCase: string;
 	tagToExcludeFile: string;
 	tagToIncludeFile: string;
+	excludeLinksToActiveFile: boolean;
 }
 
 const DEFAULT_SETTINGS: LinkerPluginSettings = {
@@ -33,6 +37,7 @@ const DEFAULT_SETTINGS: LinkerPluginSettings = {
 	suppressSuffixForSubWords: false,
 	includeAllFiles: true,
 	linkerDirectories: ["Glossary"],
+	excludedDirectories: [],
 	glossarySuffix: "🔗",
 	useMarkdownLinks: false,
 	applyDefaultLinkStyling: true,
@@ -41,11 +46,13 @@ const DEFAULT_SETTINGS: LinkerPluginSettings = {
 	tagToIgnoreCase: "linker-ignore-case",
 	tagToMatchCase: "linker-match-case",
 	tagToExcludeFile: "linker-exclude",
-	tagToIncludeFile: "linker-include"
+	tagToIncludeFile: "linker-include",
+	excludeLinksToActiveFile: true,
 };
 
 export default class LinkerPlugin extends Plugin {
 	settings: LinkerPluginSettings;
+	updateManager = new ExternalUpdateManager();
 
 	async onload() {
 		await this.loadSettings();
@@ -56,7 +63,7 @@ export default class LinkerPlugin extends Plugin {
 		});
 
 		// Register the live linker for the live edit mode
-		this.registerEditorExtension(liveLinkerPlugin(this.app, this.settings));
+		this.registerEditorExtension(liveLinkerPlugin(this.app, this.settings, this.updateManager));
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.addSettingTab(new LinkerSettingTab(this.app, this));
@@ -69,65 +76,263 @@ export default class LinkerPlugin extends Plugin {
 		// addContextMenuItem(a: any, b: any, c: any) {
 		// Capture the MouseEvent when the context menu is triggered   // Define a named function to capture the MouseEvent
 
+		if (!file) {
+			return;
+		}
+
+		// console.log('Context menu', menu, file, source);
+
 		const that = this;
 		const app: App = this.app;
+		const updateManager = this.updateManager;
 		const settings = this.settings;
 
-		function contextMenuHandler(event: MouseEvent) {
-			// Access the element that triggered the context menu
-			const targetElement = event.target;
+		const fetcher = new LinkerMetaInfoFetcher(app, settings);
+		// Check, if the file has the linker-included tag
 
-			// Check, if the element has the "virtual-link" class
-			if (targetElement instanceof HTMLElement && targetElement.classList.contains('virtual-link-a')) {
+		const isDirectory = app.vault.getAbstractFileByPath(file.path) instanceof TFolder;
+
+		if (!isDirectory) {
+			const metaInfo = fetcher.getMetaInfo(file);
+
+			function contextMenuHandler(event: MouseEvent) {
+				// Access the element that triggered the context menu
+				const targetElement = event.target;
+
+				if (!targetElement || !(targetElement instanceof HTMLElement)) {
+					console.error('No target element');
+					return;
+				}
+
+				// Check, if we are clicking on a virtual link inside a note or a note in the file explorer
+				const isVirtualLink = targetElement.classList.contains('virtual-link-a');
+
+
+				// Check, if the element has the "virtual-link" class
+				if (isVirtualLink) {
+					menu.addItem((item) => {
+
+						// Item to convert a virtual link to a real link
+						item.setTitle("[Virtual Linker] Convert to real link")
+							.setIcon("link")
+							.onClick(() => {
+								// Get from and to position from the element
+								const from = parseInt(targetElement.getAttribute('from') || '-1');
+								const to = parseInt(targetElement.getAttribute('to') || '-1');
+
+								// Get the shown text
+								const text = targetElement.getAttribute('origin-text') || '';
+								const target = file;
+								const activeFile = app.workspace.getActiveFile();
+								const activeFilePath = activeFile?.path;
+
+
+								// Create the replacement
+								let replacement = "";
+								if (settings.useMarkdownLinks) {
+									replacement = `[${text}](${target.path})`;
+								} else {
+									replacement = `[[${target.path}|${text}]]`;
+								}
+
+								if (!activeFile) {
+									console.error('No active file');
+									return;
+								}
+
+								// Replace the text
+								const editor = app.workspace.getActiveViewOfType(MarkdownView)?.editor;
+								const fromEditorPos = editor?.offsetToPos(from);
+								const toEditorPos = editor?.offsetToPos(to);
+
+								if (!fromEditorPos || !toEditorPos) {
+									console.warn('No editor positions');
+									return;
+								}
+
+								editor?.replaceRange(replacement, fromEditorPos, toEditorPos);
+							});
+					});
+				}
+
+				// Remove the listener to prevent multiple triggers
+				document.removeEventListener('contextmenu', contextMenuHandler);
+			}
+
+			if (!metaInfo.excludeFile && (metaInfo.includeAllFiles || metaInfo.includeFile || metaInfo.isInIncludedDir)) {
+				// Item to exclude a virtual link from the linker
+				// This action adds the settings.tagToExcludeFile to the file
 				menu.addItem((item) => {
-					item.setTitle("[Virtual Linker] Convert to real link")
-						.setIcon("link")
-						.onClick(() => {
-							// Get from and to position from the element
-							const from = parseInt(targetElement.getAttribute('from') || '-1');
-							const to = parseInt(targetElement.getAttribute('to') || '-1');
-
+					item.setTitle("[Virtual Linker] Exclude this file")
+						.setIcon("trash")
+						.onClick(async () => {
 							// Get the shown text
-							const text = targetElement.getAttribute('origin-text') || '';
 							const target = file;
-							const activeFile = app.workspace.getActiveFile();
-							const activeFilePath = activeFile?.path;
 
+							// Get the file
+							const targetFile = app.vault.getFileByPath(target.path);
 
-							// Create the replacement
-							let replacement = "";
-							if (settings.useMarkdownLinks) {
-								replacement = `[${text}](${target.path})`;
-							} else {
-								replacement = `[[${target.path}|${text}]]`;
-							}
-
-							if (!activeFile) {
-								console.error('No active file');
+							if (!targetFile) {
+								console.error('No target file');
 								return;
 							}
 
-							// Replace the text
-							const editor = app.workspace.getActiveViewOfType(MarkdownView)?.editor;
-							const fromEditorPos = editor?.offsetToPos(from);
-							const toEditorPos = editor?.offsetToPos(to);
+							// Add the tag to the file
+							const fileCache = app.metadataCache.getFileCache(targetFile);
+							const frontmatter = fileCache?.frontmatter || {};
 
-							if (!fromEditorPos || !toEditorPos) {
-								console.warn('No editor positions');
+							const tag = settings.tagToExcludeFile;
+							let tags = frontmatter['tags'];
+
+							if (typeof tags === 'string') {
+								tags = [tags];
+							}
+
+							if (!Array.isArray(tags)) {
+								tags = [];
+							}
+
+							if (!tags.includes(tag)) {
+								await app.fileManager.processFrontMatter(targetFile, (frontMatter) => {
+
+									if (!frontMatter.tags) {
+										frontMatter.tags = new Set();
+									}
+									const currentTags = [...frontMatter.tags];
+
+									frontMatter.tags = new Set([...currentTags, tag]);
+
+									// Remove include tag if it exists
+									const includeTag = settings.tagToIncludeFile;
+									if (frontMatter.tags.has(includeTag)) {
+										frontMatter.tags.delete(includeTag);
+									}
+
+								});
+
+								updateManager.update();
+							}
+						});
+				});
+			}
+			else if (!metaInfo.includeFile && (!metaInfo.includeAllFiles || metaInfo.excludeFile || metaInfo.isInExcludedDir)) {
+				//Item to include a virtual link from the linker
+				// This action adds the settings.tagToIncludeFile to the file
+				menu.addItem((item) => {
+					item.setTitle("[Virtual Linker] Include this file")
+						.setIcon("plus")
+						.onClick(async () => {
+							// Get the shown text
+							const target = file;
+
+							// Get the file
+							const targetFile = app.vault.getFileByPath(target.path);
+
+							if (!targetFile) {
+								console.error('No target file');
 								return;
 							}
 
-							editor?.replaceRange(replacement, fromEditorPos, toEditorPos);
+							// Add the tag to the file
+							const fileCache = app.metadataCache.getFileCache(targetFile);
+							const frontmatter = fileCache?.frontmatter || {};
+
+							const tag = settings.tagToIncludeFile;
+							let tags = frontmatter['tags'];
+
+							if (typeof tags === 'string') {
+								tags = [tags];
+							}
+
+							if (!Array.isArray(tags)) {
+								tags = [];
+							}
+
+							if (!tags.includes(tag)) {
+								await app.fileManager.processFrontMatter(targetFile, (frontMatter) => {
+
+									if (!frontMatter.tags) {
+										frontMatter.tags = new Set();
+									}
+									const currentTags = [...frontMatter.tags];
+
+									frontMatter.tags = new Set([...currentTags, tag]);
+
+									// Remove exclude tag if it exists
+									const excludeTag = settings.tagToExcludeFile;
+									if (frontMatter.tags.has(excludeTag)) {
+										frontMatter.tags.delete(excludeTag);
+									}
+
+								});
+
+								updateManager.update();
+							}
 						});
 				});
 			}
 
-			// Remove the listener to prevent multiple triggers
-			document.removeEventListener('contextmenu', contextMenuHandler);
+			// Capture the MouseEvent when the context menu is triggered
+			document.addEventListener('contextmenu', contextMenuHandler, { once: true });
 		}
+		else {
 
-		// Capture the MouseEvent when the context menu is triggered
-		document.addEventListener('contextmenu', contextMenuHandler, { once: true });
+			// Check if the directory is in the linker directories
+			const path = file.path + '/';
+			const isInIncludedDir = fetcher.includeDirPattern.test(path);
+			const isInExcludedDir = fetcher.excludeDirPattern.test(path);
+
+			// If the directory is in the linker directories, add the option to exclude it
+			if ((fetcher.includeAllFiles && !isInExcludedDir) || (isInIncludedDir)) {
+				menu.addItem((item) => {
+					item.setTitle("[Virtual Linker] Exclude this directory")
+						.setIcon("trash")
+						.onClick(async () => {
+							// Get the shown text
+							const target = file;
+
+							// Get the file
+							const targetFolder = app.vault.getAbstractFileByPath(target.path) as TFolder;
+
+							if (!targetFolder) {
+								console.error('No target folder');
+								return;
+							}
+
+							const newExcludedDirs = Array.from(new Set([...settings.excludedDirectories, targetFolder.name]));
+							const newIncludedDirs = settings.linkerDirectories.filter((dir) => dir !== targetFolder.name);
+							await this.updateSettings({ linkerDirectories: newIncludedDirs, excludedDirectories: newExcludedDirs });
+
+							updateManager.update();
+						});
+				});
+			} else if ((!fetcher.includeAllFiles && !isInIncludedDir) || isInExcludedDir) {
+				// If the directory is in the excluded directories, add the option to include it
+				menu.addItem((item) => {
+					item.setTitle("[Virtual Linker] Include this directory")
+						.setIcon("plus")
+						.onClick(async () => {
+							// Get the shown text
+							const target = file;
+
+							// Get the file
+							const targetFolder = app.vault.getAbstractFileByPath(target.path) as TFolder;
+
+							if (!targetFolder) {
+								console.error('No target folder');
+								return;
+							}
+
+							const newExcludedDirs = settings.excludedDirectories.filter((dir) => dir !== targetFolder.name);
+							const newIncludedDirs = Array.from(new Set([...settings.linkerDirectories, targetFolder.name]));
+							await this.updateSettings({ linkerDirectories: newIncludedDirs, excludedDirectories: newExcludedDirs });
+							
+							updateManager.update();
+						});
+				});
+			}
+
+		}
 	}
 
 	onunload() { }
@@ -305,22 +510,43 @@ class LinkerSettingTab extends PluginSettingTab {
 					// Set default size
 					text.inputEl.addClass('linker-settings-text-box')
 				});
+		} else {
+			new Setting(containerEl)
+				.setName("Excluded directories")
+				.setDesc("Directories to exclude for the virtual linker (separated by new lines).")
+				.addTextArea((text) => {
+					let setValue = "";
+					try {
+						setValue = this.plugin.settings.excludedDirectories.join("\n");
+					} catch (e) {
+						console.warn(e);
+					}
+
+					text.setPlaceholder("List of directory names (separated by new line)")
+						.setValue(setValue)
+						.onChange(async (value) => {
+							this.plugin.settings.excludedDirectories = value.split("\n").map((x) => x.trim()).filter((x) => x.length > 0);
+							// console.log("New folder name: " + value, this.plugin.settings.excludedDirectories);
+							await this.plugin.updateSettings();
+						});
+
+					// Set default size
+					text.inputEl.addClass('linker-settings-text-box')
+				});
 		}
 
-		if (!this.plugin.settings.includeAllFiles) {
-			// Text setting for tag to include file
-			new Setting(containerEl)
-				.setName("Tag to include file")
-				.setDesc("Tag to explicitly include the file for the linker.")
-				.addText((text) =>
-					text
-						.setValue(this.plugin.settings.tagToIncludeFile)
-						.onChange(async (value) => {
-							// console.log("New tag to include file: " + value);
-							await this.plugin.updateSettings({ tagToIncludeFile: value });
-						})
-				);
-		}
+		// Text setting for tag to include file
+		new Setting(containerEl)
+			.setName("Tag to include file")
+			.setDesc("Tag to explicitly include the file for the linker.")
+			.addText((text) =>
+				text
+					.setValue(this.plugin.settings.tagToIncludeFile)
+					.onChange(async (value) => {
+						// console.log("New tag to include file: " + value);
+						await this.plugin.updateSettings({ tagToIncludeFile: value });
+					})
+			);
 
 
 		// Text setting for tag to ignore file
@@ -336,6 +562,18 @@ class LinkerSettingTab extends PluginSettingTab {
 					})
 			);
 
+		// Toggle setting to exclude links to the active file
+		new Setting(containerEl)
+			.setName("Exclude links to active file")
+			.setDesc("If toggled, links to the active file are excluded from the linker. Warning: At the moment, this will also remove links to your active file in other visible, non-active tabs. Thus, the view might appear unstable.")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.excludeLinksToActiveFile)
+					.onChange(async (value) => {
+						// console.log("Exclude links to active file: " + value);
+						await this.plugin.updateSettings({ excludeLinksToActiveFile: value });
+					})
+			);
 
 
 		new Setting(containerEl).setName("Link style").setHeading();

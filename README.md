@@ -25,10 +25,14 @@ If you only want to include notes of a specific folder, you can define this fold
 > The auto generated links are post-processed, so they neither change your note text to hard-coded links enclosed in brackets not 
 > appear in the graph view or reference counting.
 
-## Manually installing the plugin
+## Installing the plugin
 
+Inside obsidian, you can search for "Virtual Linker" in the community plugins tab.
+After installing, enable the plugin in the settings.
+
+To manually install the plugin:
 - Copy over `main.js` & `manifest.json` (find them under `Releases`) to your vault `VaultFolder/.obsidian/plugins/virtual-linker/`.
-
+- or clone the repository into the plugins folder of your vault and build the plugin yourself.
 
 ## Settings
 
@@ -47,6 +51,11 @@ Furthermore, you can explicitly include or exclude specific files from being mat
 - `linker-include` to explicitly include a file
 - `linker-exclude` to explicitly exclude a file
 
+You can also exclude all files in a specific folder by adding the folder to the exclude list in the settings.
+
+> [!Note]
+> To include / exclude a file or folder, you can use the context menu on virtual links or in the file explorer.
+
 ### Case sensitivity
 You can toggle the case sensitivity of the matching. By default, the matching is case insensitive.
 You can also explicitly change the case sensitivity of a specific file by adding a tag to the file. You can change the tag in the settings, by default it is:
@@ -60,6 +69,10 @@ You can toggle the matching mode between:
 - "Matching any part of a word": Any part of a word is matched. E.g. "Note" will match "Notebook".
 
 If you choose "Matching any part of a word", you furthermore have the option to suppress the link suffix for these matches to avoid cluttering your text.
+
+By default, links to the currently active note are suppressed. 
+Currently, however, this suppression applies to all visible notes (if multiple tabs are open), not just the currently active note.
+You can change this behavior in the settings.
 
 ### Styling of the links
 

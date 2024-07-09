@@ -54,7 +54,7 @@ export class GlossaryLinker extends MarkdownRenderChild {
 
 			if ((newPath?.path?.length || 0) > currentPath?.path?.length) {
 				currentPath = newPath;
-				console.log("Break at New path: ", currentPath);
+				// console.log("Break at New path: ", currentPath);
 				break;
 			}
 		}
@@ -68,8 +68,6 @@ export class GlossaryLinker extends MarkdownRenderChild {
 		if (this.settings.includeHeaders) {
 			tags.push("h1", "h2", "h3", "h4", "h5", "h6");
 		}
-
-        const currentFile = this.app.workspace.getActiveFile();
 
 		for (const tag of tags) {
 			// console.log("Tag: ", tag);
@@ -101,7 +99,7 @@ export class GlossaryLinker extends MarkdownRenderChild {
 							// If we are at a word boundary, get the current fitting files
 							const isWordBoundary = PrefixTree.checkWordBoundary(char);
 							if (!this.settings.matchOnlyWholeWords || isWordBoundary) {
-								const currentNodes = this.linkerCache.cache.getCurrentMatchNodes(i, currentFile);
+								const currentNodes = this.linkerCache.cache.getCurrentMatchNodes(i);
 								if (currentNodes.length > 0) {
 
 									// TODO: Handle multiple matches

@@ -14,7 +14,7 @@ import { App, TFile, Vault } from "obsidian";
 
 import IntervalTree from '@flatten-js/interval-tree'
 import { LinkerPluginSettings } from "main";
-import { LinkerCache, PrefixTree } from "./linkerCache";
+import { ExternalUpdateManager, LinkerCache, PrefixTree } from "./linkerCache";
 
 export class LiveLinkWidget extends WidgetType {
 
@@ -60,7 +60,7 @@ export class LiveLinkWidget extends WidgetType {
             span.classList.add("virtual-link-default");
         }
 
-        
+
         span.appendChild(link);
 
         if ((this.settings.glossarySuffix?.length ?? 0) > 0) {
@@ -71,7 +71,7 @@ export class LiveLinkWidget extends WidgetType {
                 span.appendChild(icon);
             }
         }
-        
+
 
         return span;
     }
@@ -93,8 +93,9 @@ class AutoLinkerPlugin implements PluginValue {
 
     private lastCursorPos: number = 0;
     private lastActiveFile: string = "";
+    private lastViewUpdate: ViewUpdate | null = null;
 
-    constructor(view: EditorView, app: App, settings: LinkerPluginSettings) {
+    constructor(view: EditorView, app: App, settings: LinkerPluginSettings, updateManager: ExternalUpdateManager) {
         this.app = app;
         this.settings = settings;
 
@@ -104,19 +105,30 @@ class AutoLinkerPlugin implements PluginValue {
         this.linkerCache = new LinkerCache(app, this.settings);
 
         this.decorations = this.buildDecorations(view);
+
+
+        updateManager.registerCallback(() => {
+            if (this.lastViewUpdate) {
+                this.update(this.lastViewUpdate, true);
+            }
+        });
+
     }
 
-    update(update: ViewUpdate) {
+
+    update(update: ViewUpdate, force: boolean = false) {
         const cursorPos = update.view.state.selection.main.from;
         const activeFile = this.app.workspace.getActiveFile()?.path;
         const fileChanged = activeFile != this.lastActiveFile;
 
-        if (this.lastCursorPos != cursorPos || update.docChanged || fileChanged || update.viewportChanged) {
+        if (force || this.lastCursorPos != cursorPos || update.docChanged || fileChanged || update.viewportChanged) {
             this.lastCursorPos = cursorPos;
-            this.linkerCache.updateCache();
+            this.linkerCache.updateCache(force);
             this.decorations = this.buildDecorations(update.view);
             this.lastActiveFile = activeFile ?? "";
         }
+
+        this.lastViewUpdate = update;
     }
 
 
@@ -145,18 +157,18 @@ class AutoLinkerPlugin implements PluginValue {
                 // If we are at a word boundary, get the current fitting files
                 const isWordBoundary = PrefixTree.checkWordBoundary(char);
                 if (!this.settings.matchOnlyWholeWords || isWordBoundary) {
-                    const currentNodes = this.linkerCache.cache.getCurrentMatchNodes(i, currentFile);
+                    const currentNodes = this.linkerCache.cache.getCurrentMatchNodes(i);
                     if (currentNodes.length > 0) {
-                        
+
                         // TODO: Handle multiple matches
                         const node = currentNodes[0];
                         const nFrom = node.start;
                         const nTo = node.end;
                         const name = text.slice(nFrom, nTo);
-                        
+
                         // TODO: Handle multiple files
                         const file: TFile = node.files.values().next().value;
-                        
+
                         const aFrom = from + nFrom;
                         const aTo = from + nTo;
 
@@ -164,7 +176,7 @@ class AutoLinkerPlugin implements PluginValue {
                             id: id++,
                             from: aFrom,
                             to: aTo,
-                            widget: new LiveLinkWidget(name, file, aFrom, aTo, !isWordBoundary,this.app, this.settings)
+                            widget: new LiveLinkWidget(name, file, aFrom, aTo, !isWordBoundary, this.app, this.settings)
                         });
                     }
                 }
@@ -262,9 +274,9 @@ const pluginSpec: PluginSpec<AutoLinkerPlugin> = {
     decorations: (value: AutoLinkerPlugin) => value.decorations,
 };
 
-export const liveLinkerPlugin = (app: App, settings: LinkerPluginSettings) => {
+export const liveLinkerPlugin = (app: App, settings: LinkerPluginSettings, updateManager: ExternalUpdateManager) => {
     return ViewPlugin.define((editorView: EditorView) => {
-        return (new AutoLinkerPlugin(editorView, app, settings));
+        return (new AutoLinkerPlugin(editorView, app, settings, updateManager));
     }, pluginSpec)
 }
 
