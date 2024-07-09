@@ -1,3 +1,6 @@
+[![Buy Me a Coffee](https://img.shields.io/badge/donate-Buy%20Me%20a%20Coffee-blue.svg)](https://www.buymeacoffee.com/vschroeter) 
+[![PayPal](https://img.shields.io/badge/donate-PayPal-blue.svg)](https://paypal.me/valentinschroeter)
+
 # Obsidian Virtual Linker Plugin (Glossary Plugin)
 
 This plugin automatically generates virtual links for text within your notes that match with the titles or aliases of other notes in your vault.
