@@ -29,7 +29,8 @@ export interface LinkerPluginSettings {
 	tagToMatchCase: string;
 	tagToExcludeFile: string;
 	tagToIncludeFile: string;
-	excludeLinksToActiveFile: boolean;
+	excludeLinksToOwnNote: boolean;
+	excludeLinksInCurrentLine: boolean;
 }
 
 const DEFAULT_SETTINGS: LinkerPluginSettings = {
@@ -47,7 +48,8 @@ const DEFAULT_SETTINGS: LinkerPluginSettings = {
 	tagToMatchCase: "linker-match-case",
 	tagToExcludeFile: "linker-exclude",
 	tagToIncludeFile: "linker-include",
-	excludeLinksToActiveFile: true,
+	excludeLinksToOwnNote: true,
+	excludeLinksInCurrentLine: false,
 };
 
 export default class LinkerPlugin extends Plugin {
@@ -326,7 +328,7 @@ export default class LinkerPlugin extends Plugin {
 							const newExcludedDirs = settings.excludedDirectories.filter((dir) => dir !== targetFolder.name);
 							const newIncludedDirs = Array.from(new Set([...settings.linkerDirectories, targetFolder.name]));
 							await this.updateSettings({ linkerDirectories: newIncludedDirs, excludedDirectories: newExcludedDirs });
-							
+
 							updateManager.update();
 						});
 				});
@@ -373,18 +375,6 @@ class LinkerSettingTab extends PluginSettingTab {
 		containerEl.empty();
 
 		new Setting(containerEl).setName("Matching behavior").setHeading();
-
-		new Setting(containerEl)
-			.setName("Virtual link suffix")
-			.setDesc("The suffix to add to auto generated virtual links.")
-			.addText((text) =>
-				text
-					.setValue(this.plugin.settings.glossarySuffix)
-					.onChange(async (value) => {
-						// console.log("New glossary suffix: " + value);
-						await this.plugin.updateSettings({ glossarySuffix: value });
-					})
-			);
 
 		// Toggle setting for case sensitivity
 		new Setting(containerEl)
@@ -469,6 +459,19 @@ class LinkerSettingTab extends PluginSettingTab {
 						})
 				);
 		}
+
+		// Toggle setting to exclude links in the current line
+		new Setting(containerEl)
+			.setName("Avoid linking in current line")
+			.setDesc("If activated, there will be no links in the current line. This is the recommended setting if you are using IME (input method editor) for typing, e.g. for chinese characters, because instant linking might interfere with IME.")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.excludeLinksInCurrentLine)
+					.onChange(async (value) => {
+						// console.log("Exclude links in current line: " + value);
+						await this.plugin.updateSettings({ excludeLinksInCurrentLine: value });
+					})
+			);
 
 
 		new Setting(containerEl).setName("Matched files").setHeading();
@@ -564,19 +567,31 @@ class LinkerSettingTab extends PluginSettingTab {
 
 		// Toggle setting to exclude links to the active file
 		new Setting(containerEl)
-			.setName("Exclude links to active file")
-			.setDesc("If toggled, links to the active file are excluded from the linker. Warning: At the moment, this will also remove links to your active file in other visible, non-active tabs. Thus, the view might appear unstable.")
+			.setName("Exclude self-links to the current note")
+			.setDesc("If toggled, links to the note itself are excluded from the linker. (This might not work in preview windows.)")
 			.addToggle((toggle) =>
 				toggle
-					.setValue(this.plugin.settings.excludeLinksToActiveFile)
+					.setValue(this.plugin.settings.excludeLinksToOwnNote)
 					.onChange(async (value) => {
 						// console.log("Exclude links to active file: " + value);
-						await this.plugin.updateSettings({ excludeLinksToActiveFile: value });
+						await this.plugin.updateSettings({ excludeLinksToOwnNote: value });
 					})
 			);
 
 
 		new Setting(containerEl).setName("Link style").setHeading();
+
+		new Setting(containerEl)
+			.setName("Virtual link suffix")
+			.setDesc("The suffix to add to auto generated virtual links.")
+			.addText((text) =>
+				text
+					.setValue(this.plugin.settings.glossarySuffix)
+					.onChange(async (value) => {
+						// console.log("New glossary suffix: " + value);
+						await this.plugin.updateSettings({ glossarySuffix: value });
+					})
+			);
 
 		// Toggle setting to apply default link styling
 		new Setting(containerEl)

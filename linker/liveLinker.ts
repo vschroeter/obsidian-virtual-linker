@@ -10,11 +10,24 @@ import {
     ViewUpdate,
     WidgetType,
 } from "@codemirror/view";
-import { App, TFile, Vault } from "obsidian";
+import { App, MarkdownView, TFile, Vault } from "obsidian";
 
 import IntervalTree from '@flatten-js/interval-tree'
 import { LinkerPluginSettings } from "main";
 import { ExternalUpdateManager, LinkerCache, PrefixTree } from "./linkerCache";
+
+function isDescendant(parent: HTMLElement, child: HTMLElement, maxDepth: number = 10) {
+    let node = child.parentNode;
+    let depth = 0;
+    while (node != null && depth < maxDepth) {
+        if (node === parent) {
+            return true;
+        }
+        node = node.parentNode;
+        depth++;
+    }
+    return false;
+}
 
 export class LiveLinkWidget extends WidgetType {
 
@@ -91,9 +104,13 @@ class AutoLinkerPlugin implements PluginValue {
 
     settings: LinkerPluginSettings;
 
+
+
     private lastCursorPos: number = 0;
     private lastActiveFile: string = "";
     private lastViewUpdate: ViewUpdate | null = null;
+
+    viewUpdateDomToFileMap: Map<HTMLElement, TFile | undefined | null> = new Map();
 
     constructor(view: EditorView, app: App, settings: LinkerPluginSettings, updateManager: ExternalUpdateManager) {
         this.app = app;
@@ -117,6 +134,22 @@ class AutoLinkerPlugin implements PluginValue {
 
 
     update(update: ViewUpdate, force: boolean = false) {
+        const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+        activeView?.file
+
+        // Method to check if the update is on the active view
+        let updateIsOnActiveView = false;
+        if (this.settings.excludeLinksInCurrentLine || this.settings.excludeLinksToOwnNote) {
+            const domFromUpdate = update.view.dom;
+            const domFromWorkspace = activeView?.contentEl;
+            updateIsOnActiveView = domFromWorkspace ? isDescendant(domFromWorkspace, domFromUpdate, 3) : false;
+
+            // We store this information to be able to map the view updates to a obsidian file
+            if (updateIsOnActiveView) {
+                this.viewUpdateDomToFileMap.set(domFromUpdate, activeView?.file);
+            }
+        }
+
         const cursorPos = update.view.state.selection.main.from;
         const activeFile = this.app.workspace.getActiveFile()?.path;
         const fileChanged = activeFile != this.lastActiveFile;
@@ -124,7 +157,7 @@ class AutoLinkerPlugin implements PluginValue {
         if (force || this.lastCursorPos != cursorPos || update.docChanged || fileChanged || update.viewportChanged) {
             this.lastCursorPos = cursorPos;
             this.linkerCache.updateCache(force);
-            this.decorations = this.buildDecorations(update.view);
+            this.decorations = this.buildDecorations(update.view, updateIsOnActiveView);
             this.lastActiveFile = activeFile ?? "";
         }
 
@@ -135,10 +168,11 @@ class AutoLinkerPlugin implements PluginValue {
 
     destroy() { }
 
-    buildDecorations(view: EditorView): DecorationSet {
+    buildDecorations(view: EditorView, viewIsActive: boolean = true): DecorationSet {
         const builder = new RangeSetBuilder<Decoration>();
-        const currentFile = this.app.workspace.getActiveFile();
-
+        const dom = view.dom;
+        const mappedFile = this.viewUpdateDomToFileMap.get(dom);
+        
         for (let { from, to } of view.visibleRanges) {
 
             this.linkerCache.reset();
@@ -157,7 +191,7 @@ class AutoLinkerPlugin implements PluginValue {
                 // If we are at a word boundary, get the current fitting files
                 const isWordBoundary = PrefixTree.checkWordBoundary(char);
                 if (!this.settings.matchOnlyWholeWords || isWordBoundary) {
-                    const currentNodes = this.linkerCache.cache.getCurrentMatchNodes(i);
+                    const currentNodes = this.linkerCache.cache.getCurrentMatchNodes(i, this.settings.excludeLinksToOwnNote ? mappedFile : null);
                     if (currentNodes.length > 0) {
 
                         // TODO: Handle multiple matches
@@ -241,7 +275,6 @@ class AutoLinkerPlugin implements PluginValue {
                     // console.log(text, node, node.type.name, node.from, node.to)
 
                     const type = node.type.name;
-
                     for (const excludedType of excludedTypes) {
                         if (type.contains(excludedType)) {
                             excludedIntervalTree.insert([node.from, node.to]);
@@ -250,14 +283,22 @@ class AutoLinkerPlugin implements PluginValue {
                 },
             });
 
+            // Get the cursor position
             const cursorPos = view.state.selection.main.from;
+
+            // Get the line start and end positions if we want to exclude links in the current line
+            const excludeLine = viewIsActive && this.settings.excludeLinksInCurrentLine;
+            const lineStart = view.state.doc.lineAt(cursorPos).from;
+            const lineEnd = view.state.doc.lineAt(cursorPos).to;
 
             filteredAdditions.forEach(addition => {
                 const [from, to] = [addition.from, addition.to];
                 const overlaps = excludedIntervalTree.search([from, to]);
                 const cursorNearby = (cursorPos >= from - 0 && cursorPos <= to + 0);
 
-                if (overlaps.length === 0 && !cursorNearby) {
+                const additionIsInCurrentLine = from >= lineStart && to <= lineEnd;
+
+                if (overlaps.length === 0 && !cursorNearby && (!excludeLine || !additionIsInCurrentLine)) {
                     builder.add(from, to, Decoration.replace({
                         widget: addition.widget
                     }));

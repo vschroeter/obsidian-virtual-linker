@@ -56,12 +56,10 @@ export class PrefixTree {
     getCurrentMatchNodes(index: number, excludedNote?: TFile | null): MatchNode[] {
         const matchNodes: MatchNode[] = [];
 
-        if (!excludedNote && this.settings.excludeLinksToActiveFile) {
+        if (excludedNote === undefined && this.settings.excludeLinksToOwnNote) {
             excludedNote = this.app.workspace.getActiveFile();
-        } else {
-            excludedNote = null;
         }
-
+        
         // From the current nodes in the trie, get all nodes that have files
         for (const node of this._currentNodes) {
             if (node.files.size === 0) {
@@ -70,7 +68,7 @@ export class PrefixTree {
             const matchNode = new MatchNode();
             matchNode.length = node.value.length;
             matchNode.start = index - matchNode.length;
-            matchNode.files = new Set(Array.from(node.files).filter(file => !excludedNote || file.path !== excludedNote.path));;
+            matchNode.files = new Set(Array.from(node.files).filter(file => !excludedNote || file.path !== excludedNote.path));
             matchNode.value = node.value;
             if (matchNode.files.size > 0) {
                 matchNodes.push(matchNode);

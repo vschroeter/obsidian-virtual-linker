@@ -73,9 +73,16 @@ You can toggle the matching mode between:
 
 If you choose "Matching any part of a word", you furthermore have the option to suppress the link suffix for these matches to avoid cluttering your text.
 
-By default, links to the currently active note are suppressed. 
-Currently, however, this suppression applies to all visible notes (if multiple tabs are open), not just the currently active note.
-You can change this behavior in the settings.
+By default, links to a note itself are suppressed.
+This link suppression might be a bit buggy and not work in all cases, e.g. in preview windows.
+If you like self-links to the note itself, you can toggle this behavior in the settings.
+
+By default, links are created directly as you type.
+You can disable links for the current line you are typing.
+
+> [!Note]
+> Deactivating the link creation for the current line is recommended when using the plugin with IME (input method editor) for languages like Chinese or Japanese, as the plugin might otherwise interfere with the IME.
+
 
 ### Styling of the links
 
