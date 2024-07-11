@@ -63,6 +63,11 @@ export class GlossaryLinker extends MarkdownRenderChild {
 	}
 
 	onload() {
+		
+        if (!this.settings.linkerActivated) {
+            return;
+		}
+		
 		// return;
 		const tags = ["p", "li", "td", "th", "span", "em", "strong"]; //"div"
 		if (this.settings.includeHeaders) {

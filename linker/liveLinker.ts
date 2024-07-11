@@ -170,6 +170,11 @@ class AutoLinkerPlugin implements PluginValue {
 
     buildDecorations(view: EditorView, viewIsActive: boolean = true): DecorationSet {
         const builder = new RangeSetBuilder<Decoration>();
+
+        if (!this.settings.linkerActivated) {
+            return builder.finish();
+        }
+
         const dom = view.dom;
         const mappedFile = this.viewUpdateDomToFileMap.get(dom);
 

@@ -15,6 +15,7 @@ import { ExternalUpdateManager } from "linker/linkerCache";
 import { LinkerMetaInfoFetcher } from "linker/linkerInfo";
 
 export interface LinkerPluginSettings {
+	linkerActivated: boolean;
 	suppressSuffixForSubWords: boolean;
 	matchOnlyWholeWords: boolean;
 	includeAllFiles: boolean;
@@ -36,6 +37,7 @@ export interface LinkerPluginSettings {
 }
 
 const DEFAULT_SETTINGS: LinkerPluginSettings = {
+	linkerActivated: true,
 	matchOnlyWholeWords: false,
 	suppressSuffixForSubWords: false,
 	includeAllFiles: true,
@@ -76,6 +78,36 @@ export default class LinkerPlugin extends Plugin {
 
 		// Context menu item to convert virtual links to real links
 		this.registerEvent(this.app.workspace.on('file-menu', (menu, file, source) => this.addContextMenuItem(menu, file, source)));
+
+		this.addCommand({
+			id: "activate-virtual-linker",
+			name: "Activate Virtual Linker",
+			checkCallback: (checking) => {
+				if (!this.settings.linkerActivated) {
+					if (!checking) {
+						this.updateSettings({ linkerActivated: true });
+						this.updateManager.update();
+					}
+					return true;
+				}
+				return false;
+			}
+		});
+
+		this.addCommand({
+			id: "deactivate-virtual-linker",
+			name: "Deactivate Virtual Linker",
+			checkCallback: (checking) => {
+				if (this.settings.linkerActivated) {
+					if (!checking) {
+						this.updateSettings({ linkerActivated: false });
+						this.updateManager.update();
+					}
+					return true;
+				}
+				return false;
+			}
+		});
 	}
 
 	addContextMenuItem(menu: Menu, file: TAbstractFile, source: string) {
@@ -380,6 +412,18 @@ class LinkerSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl).setName("Matching behavior").setHeading();
 
+		// Toggle to activate or deactivate the linker
+		new Setting(containerEl)
+			.setName("Activate Virtual Linker")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.linkerActivated)
+					.onChange(async (value) => {
+						// console.log("Linker activated: " + value);
+						await this.plugin.updateSettings({ linkerActivated: value });
+					})
+			);
+
 		// Toggle to only link once
 		new Setting(containerEl)
 			.setName("Only link once")
@@ -391,8 +435,8 @@ class LinkerSettingTab extends PluginSettingTab {
 						// console.log("Only link once: " + value);
 						await this.plugin.updateSettings({ onlyLinkOnce: value });
 					})
-		);
-		
+			);
+
 		// Toggle to exclude links to real linked files
 		new Setting(containerEl)
 			.setName("Exclude links to real linked files")
@@ -404,7 +448,7 @@ class LinkerSettingTab extends PluginSettingTab {
 						// console.log("Exclude links to real linked files: " + value);
 						await this.plugin.updateSettings({ excludeLinksToRealLinkedFiles: value });
 					})
-		);
+			);
 
 		// Toggle setting for case sensitivity
 		new Setting(containerEl)

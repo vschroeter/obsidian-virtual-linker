@@ -59,7 +59,7 @@ export class PrefixTree {
         if (excludedNote === undefined && this.settings.excludeLinksToOwnNote) {
             excludedNote = this.app.workspace.getActiveFile();
         }
-        
+
         // From the current nodes in the trie, get all nodes that have files
         for (const node of this._currentNodes) {
             if (node.files.size === 0) {
@@ -113,9 +113,9 @@ export class PrefixTree {
             // Get the tags of the file
             // and normalize them by removing the # in front of tags
             const tags = (getAllTags(this.app.metadataCache.getFileCache(file)!!) ?? [])
-                    .filter(tag => tag.trim().length > 0)
+                .filter(tag => tag.trim().length > 0)
                 .map(tag => tag.startsWith("#") ? tag.slice(1) : tag);
-                
+
             const includeFile = metaInfo.includeFile;
             const excludeFile = metaInfo.excludeFile;
 
