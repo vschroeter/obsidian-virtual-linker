@@ -31,6 +31,8 @@ export interface LinkerPluginSettings {
 	tagToIncludeFile: string;
 	excludeLinksToOwnNote: boolean;
 	excludeLinksInCurrentLine: boolean;
+	onlyLinkOnce: boolean;
+	excludeLinksToRealLinkedFiles: boolean;
 }
 
 const DEFAULT_SETTINGS: LinkerPluginSettings = {
@@ -50,6 +52,8 @@ const DEFAULT_SETTINGS: LinkerPluginSettings = {
 	tagToIncludeFile: "linker-include",
 	excludeLinksToOwnNote: true,
 	excludeLinksInCurrentLine: false,
+	onlyLinkOnce: true,
+	excludeLinksToRealLinkedFiles: true,
 };
 
 export default class LinkerPlugin extends Plugin {
@@ -375,6 +379,32 @@ class LinkerSettingTab extends PluginSettingTab {
 		containerEl.empty();
 
 		new Setting(containerEl).setName("Matching behavior").setHeading();
+
+		// Toggle to only link once
+		new Setting(containerEl)
+			.setName("Only link once")
+			.setDesc("If activated, there will not be several identical virtual links in the same note (Wikipedia style).")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.onlyLinkOnce)
+					.onChange(async (value) => {
+						// console.log("Only link once: " + value);
+						await this.plugin.updateSettings({ onlyLinkOnce: value });
+					})
+		);
+		
+		// Toggle to exclude links to real linked files
+		new Setting(containerEl)
+			.setName("Exclude links to real linked files")
+			.setDesc("If activated, there will be no links to files that are already linked in the note by real links.")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.excludeLinksToRealLinkedFiles)
+					.onChange(async (value) => {
+						// console.log("Exclude links to real linked files: " + value);
+						await this.plugin.updateSettings({ excludeLinksToRealLinkedFiles: value });
+					})
+		);
 
 		// Toggle setting for case sensitivity
 		new Setting(containerEl)

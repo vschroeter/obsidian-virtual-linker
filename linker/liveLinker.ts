@@ -172,14 +172,14 @@ class AutoLinkerPlugin implements PluginValue {
         const builder = new RangeSetBuilder<Decoration>();
         const dom = view.dom;
         const mappedFile = this.viewUpdateDomToFileMap.get(dom);
-        
+
         for (let { from, to } of view.visibleRanges) {
 
             this.linkerCache.reset();
             const text = view.state.doc.sliceString(from, to);
 
             // For every glossary file and its aliases we now search the text for occurrences
-            const additions: { id: number, from: number, to: number, widget: WidgetType }[] = [];
+            const additions: { id: number, file: TFile, from: number, to: number, widget: WidgetType }[] = [];
 
             let id = 0;
             // Iterate over every char in the text
@@ -193,25 +193,27 @@ class AutoLinkerPlugin implements PluginValue {
                 if (!this.settings.matchOnlyWholeWords || isWordBoundary) {
                     const currentNodes = this.linkerCache.cache.getCurrentMatchNodes(i, this.settings.excludeLinksToOwnNote ? mappedFile : null);
                     if (currentNodes.length > 0) {
+                        for (const node of currentNodes) {
+                            const nFrom = node.start;
+                            const nTo = node.end;
+                            const name = text.slice(nFrom, nTo);
 
-                        // TODO: Handle multiple matches
-                        const node = currentNodes[0];
-                        const nFrom = node.start;
-                        const nTo = node.end;
-                        const name = text.slice(nFrom, nTo);
+                            const aFrom = from + nFrom;
+                            const aTo = from + nTo;
 
-                        // TODO: Handle multiple files
-                        const file: TFile = node.files.values().next().value;
+                            // TODO: Handle multiple files
+                            // const file: TFile = node.files.values().next().value;
+                            node.files.forEach((file) => {
+                                additions.push({
+                                    id: id++,
+                                    from: aFrom,
+                                    to: aTo,
+                                    file: file,
+                                    widget: new LiveLinkWidget(name, file, aFrom, aTo, !isWordBoundary, this.app, this.settings)
+                                });
+                            });
 
-                        const aFrom = from + nFrom;
-                        const aTo = from + nTo;
-
-                        additions.push({
-                            id: id++,
-                            from: aFrom,
-                            to: aTo,
-                            widget: new LiveLinkWidget(name, file, aFrom, aTo, !isWordBoundary, this.app, this.settings)
-                        });
+                        }
                     }
                 }
 
@@ -229,30 +231,6 @@ class AutoLinkerPlugin implements PluginValue {
                 return a.from - b.from
             });
 
-
-
-            // Delete additions that overlap
-            // Additions are sorted by from position and after that by length, we want to keep longer additions
-            const filteredAdditions = [];
-            const additionsToDelete: Map<number, boolean> = new Map();
-            for (let i = 0; i < additions.length; i++) {
-                const addition = additions[i];
-                for (let j = i + 1; j < additions.length; j++) {
-                    const otherAddition = additions[j];
-                    if (otherAddition.from >= addition.to) {
-                        break;
-                    }
-
-                    additionsToDelete.set(otherAddition.id, true);
-                }
-            }
-
-            for (const addition of additions) {
-                if (!additionsToDelete.has(addition.id)) {
-                    filteredAdditions.push(addition);
-                }
-            }
-
             // We want to exclude some syntax nodes from being decorated,
             // such as code blocks and manually added links
             const excludedIntervalTree = new IntervalTree();
@@ -267,21 +245,94 @@ class AutoLinkerPlugin implements PluginValue {
                 excludedTypes.push("header-")
             }
 
+            // We also want to exclude links to files that are already linked by a real link
+            const explicitlyLinkedFiles = new Set<TFile>();
+            const app = this.app;
             syntaxTree(view.state).iterate({
                 from,
                 to,
                 enter(node) {
                     // const text = view.state.doc.sliceString(node.from, node.to);
-                    // console.log(text, node, node.type.name, node.from, node.to)
-
                     const type = node.type.name;
                     for (const excludedType of excludedTypes) {
                         if (type.contains(excludedType)) {
                             excludedIntervalTree.insert([node.from, node.to]);
+                            
+                            // internal-link --> Apples ... without the exact path
+                            // internal-link_link-has-alias --> Dir/File.md
+                            if (type.contains("internal-link_link-has-alias") || type.endsWith("internal-link")) {
+                                const text = view.state.doc.sliceString(node.from, node.to);
+                                const linkedFile = app.metadataCache.getFirstLinkpathDest(text, mappedFile?.path ?? "")
+                                // console.log(node.type.name, node.from, node.to, text, linkedFile)
+                                if (linkedFile) {
+                                    explicitlyLinkedFiles.add(linkedFile);
+                                }
+
+                            }
                         }
                     }
+
                 },
             });
+
+
+            const filteredAdditions = [];
+            const additionsToDelete: Map<number, boolean> = new Map(); 
+            
+            // Delete additions that links to already linked files
+            if (this.settings.excludeLinksToRealLinkedFiles) {
+                for (const addition of additions) {
+                    if (explicitlyLinkedFiles.has(addition.file)) {
+                        additionsToDelete.set(addition.id, true);
+                    }
+                }
+            }
+
+            // Delete additions that overlap
+            // Additions are sorted by from position and after that by length, we want to keep longer additions
+            for (let i = 0; i < additions.length; i++) {
+                const addition = additions[i];
+                if (additionsToDelete.has(addition.id)) {
+                    continue;
+                }
+
+                // Check if the addition is inside an excluded block
+                const overlaps = excludedIntervalTree.search([addition.from, addition.to]);
+                if (overlaps.length > 0) {
+                    additionsToDelete.set(addition.id, true);
+                    continue;
+                }
+
+                // Set all overlapping additions to be deleted
+                for (let j = i + 1; j < additions.length; j++) {
+                    const otherAddition = additions[j];
+                    if (otherAddition.from >= addition.to) {
+                        break;
+                    }
+                    additionsToDelete.set(otherAddition.id, true);
+                }
+
+                // Set all additions that link to the same file to be deleted
+                if (this.settings.onlyLinkOnce) {
+                    for (let j = i + 1; j < additions.length; j++) {
+                        const otherAddition = additions[j];
+                        if (additionsToDelete.has(otherAddition.id)) {
+                            continue;
+                        }
+    
+                        if (otherAddition.file === addition.file) {
+                            additionsToDelete.set(otherAddition.id, true);
+                        }
+                    }
+                }
+            }
+
+            for (const addition of additions) {
+                if (!additionsToDelete.has(addition.id)) {
+                    filteredAdditions.push(addition);
+                }
+            }
+
 
             // Get the cursor position
             const cursorPos = view.state.selection.main.from;
@@ -293,12 +344,11 @@ class AutoLinkerPlugin implements PluginValue {
 
             filteredAdditions.forEach(addition => {
                 const [from, to] = [addition.from, addition.to];
-                const overlaps = excludedIntervalTree.search([from, to]);
                 const cursorNearby = (cursorPos >= from - 0 && cursorPos <= to + 0);
 
                 const additionIsInCurrentLine = from >= lineStart && to <= lineEnd;
 
-                if (overlaps.length === 0 && !cursorNearby && (!excludeLine || !additionIsInCurrentLine)) {
+                if (!cursorNearby && (!excludeLine || !additionIsInCurrentLine)) {
                     builder.add(from, to, Decoration.replace({
                         widget: addition.widget
                     }));

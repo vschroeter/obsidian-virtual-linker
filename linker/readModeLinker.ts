@@ -68,6 +68,12 @@ export class GlossaryLinker extends MarkdownRenderChild {
 		if (this.settings.includeHeaders) {
 			tags.push("h1", "h2", "h3", "h4", "h5", "h6");
 		}
+		
+		// TODO: Onload is called on the divs separately, so this sets are not stored between divs
+		// Since divs can be rendered in arbitrary order, storing information about already linked files is not easy
+		// Maybe there is a good and performant solution to this problem
+		const linkedFiles = new Set<TFile>();
+		const explicitlyLinkedFiles = new Set<TFile>();
 
 		for (const tag of tags) {
 			// console.log("Tag: ", tag);
@@ -135,19 +141,57 @@ export class GlossaryLinker extends MarkdownRenderChild {
 							return a.from - b.from
 						});
 
-						// Delete additions that overlap
-						// Additions are sorted by from position and after that by length, we want to keep longer additions
 						const filteredAdditions = [];
 						const additionsToDelete: Map<number, boolean> = new Map();
+
+						// Delete additions that links to already linked files
+						if (this.settings.excludeLinksToRealLinkedFiles) {
+							for (const addition of additions) {
+								if (explicitlyLinkedFiles.has(addition.file)) {
+									additionsToDelete.set(addition.id, true);
+								}
+							}
+						}
+
+						// Delete all additions to already virtually linked files
+						if (this.settings.onlyLinkOnce) {
+							for (const addition of additions) {
+								if (linkedFiles.has(addition.file)) {
+									additionsToDelete.set(addition.id, true);
+								}
+							}
+						}
+
+
+						// Delete additions that overlap
+						// Additions are sorted by from position and after that by length, we want to keep longer additions
 						for (let i = 0; i < additions.length; i++) {
 							const addition = additions[i];
+							if (additionsToDelete.has(addition.id)) {
+								continue;
+							}
+
+							// Set all overlapping additions to be deleted
 							for (let j = i + 1; j < additions.length; j++) {
 								const otherAddition = additions[j];
 								if (otherAddition.from >= addition.to) {
 									break;
 								}
-
 								additionsToDelete.set(otherAddition.id, true);
+							}
+
+							// Set all additions that link to the same file to be deleted
+							if (this.settings.onlyLinkOnce) {
+								for (let j = i + 1; j < additions.length; j++) {
+									const otherAddition = additions[j];
+									if (additionsToDelete.has(otherAddition.id)) {
+										continue;
+									}
+
+									if (otherAddition.file.path === addition.file.path) {
+										additionsToDelete.set(otherAddition.id, true);
+									}
+								}
 							}
 						}
 
@@ -162,6 +206,8 @@ export class GlossaryLinker extends MarkdownRenderChild {
 						// console.log("Parent: ", parent);
 
 						for (let addition of filteredAdditions) {
+							linkedFiles.add(addition.file);
+
 							// get linkpath
 							const destName = this.ctx.sourcePath.replace(/(.*).md/, "$1");
 							// const destName = this.ctx.sourcePath;

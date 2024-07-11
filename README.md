@@ -39,11 +39,6 @@ To manually install the plugin:
 
 ## Settings
 
-### Virtual Link Suffix
-
-Any created virtual link will be appended with this suffix. This is useful to distinguish between real and virtual links.
-By default, the suffix is "🔗".
-
 ## Matched files
 
 You can toggle the matching of files between:
@@ -67,16 +62,23 @@ You can also explicitly change the case sensitivity of a specific file by adding
 
 ### Matching mode
 
+#### Suppress multiple matching and matching to real links
+By default, the plugin will suppress several identical virtual link in the same note.
+Furthermore, you can toggle to suppress the creation of virtual links to files, that are linked by real links in the current note. 
+
+#### Part matching
 You can toggle the matching mode between:
 - "Matching only whole words": Only whole words are matched. E.g. "Note" will not match "Notebook".
 - "Matching any part of a word": Any part of a word is matched. E.g. "Note" will match "Notebook".
 
 If you choose "Matching any part of a word", you furthermore have the option to suppress the link suffix for these matches to avoid cluttering your text.
 
+#### Links to the note itself
 By default, links to a note itself are suppressed.
 This link suppression might be a bit buggy and not work in all cases, e.g. in preview windows.
 If you like self-links to the note itself, you can toggle this behavior in the settings.
 
+#### Link suppression in current line 
 By default, links are created directly as you type.
 You can disable links for the current line you are typing.
 
@@ -85,6 +87,9 @@ You can disable links for the current line you are typing.
 
 
 ### Styling of the links
+
+Any created virtual link will be appended with this suffix. This is useful to distinguish between real and virtual links.
+By default, the suffix is "🔗".
 
 By default (and if the default styling is toggled on in the settings), the links appear a little bit darker than your normal links.
 You can turn off this default styling in the settings.
