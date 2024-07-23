@@ -119,7 +119,7 @@ class AutoLinkerPlugin implements PluginValue {
         const { vault } = this.app;
         this.vault = vault;
 
-        this.linkerCache = new LinkerCache(app, this.settings);
+        this.linkerCache = LinkerCache.getInstance(app, this.settings);
 
         this.decorations = this.buildDecorations(view);
 
@@ -135,7 +135,6 @@ class AutoLinkerPlugin implements PluginValue {
 
     update(update: ViewUpdate, force: boolean = false) {
         const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
-        activeView?.file
 
         // Method to check if the update is on the active view
         let updateIsOnActiveView = false;

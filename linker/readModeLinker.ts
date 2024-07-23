@@ -31,7 +31,7 @@ export class GlossaryLinker extends MarkdownRenderChild {
 		this.app = app;
 		this.ctx = context;
 
-		this.linkerCache = new LinkerCache(app, settings);
+        this.linkerCache = LinkerCache.getInstance(app, settings);
 
 		// TODO: Fix this?
 		// If not called, sometimes (especially for lists) elements are added to the context after they already have been loaded

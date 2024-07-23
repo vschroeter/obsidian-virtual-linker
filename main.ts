@@ -397,6 +397,7 @@ export default class LinkerPlugin extends Plugin {
 	async updateSettings(settings: Partial<LinkerPluginSettings> = <Partial<LinkerPluginSettings>>{}) {
 		Object.assign(this.settings, settings);
 		await this.saveData(this.settings);
+		this.updateManager.update();
 	}
 }
 
