@@ -138,7 +138,7 @@ class AutoLinkerPlugin implements PluginValue {
 
         // Method to check if the update is on the active view
         let updateIsOnActiveView = false;
-        if (this.settings.excludeLinksInCurrentLine || this.settings.excludeLinksToOwnNote) {
+        if (this.settings.fixIMEProblem || this.settings.excludeLinksToOwnNote) {
             const domFromUpdate = update.view.dom;
             const domFromWorkspace = activeView?.contentEl;
             updateIsOnActiveView = domFromWorkspace ? isDescendant(domFromWorkspace, domFromUpdate, 3) : false;
@@ -342,7 +342,7 @@ class AutoLinkerPlugin implements PluginValue {
             const cursorPos = view.state.selection.main.from;
 
             // Get the line start and end positions if we want to exclude links in the current line
-            const excludeLine = viewIsActive && this.settings.excludeLinksInCurrentLine;
+            const fixIMEProblem = viewIsActive && this.settings.fixIMEProblem;
             const lineStart = view.state.doc.lineAt(cursorPos).from;
             const lineEnd = view.state.doc.lineAt(cursorPos).to;
 
@@ -352,7 +352,28 @@ class AutoLinkerPlugin implements PluginValue {
 
                 const additionIsInCurrentLine = from >= lineStart && to <= lineEnd;
 
-                if (!cursorNearby && (!excludeLine || !additionIsInCurrentLine)) {
+                let needImeFix = true;
+                if (additionIsInCurrentLine && cursorPos > to){
+                    let gapString = view.state.sliceDoc(to, cursorPos);
+                    let strBeforeAdd = view.state.sliceDoc(lineStart, from);
+                    const regAddInLineStart = /(^\s*$)|(^\s*- +$)|(^\s*#{1,6} $)|(^\s*>+ *$)|(^\s*- +#{1,6} $)/;
+                    // check add is at line start
+                    if (!regAddInLineStart.test(strBeforeAdd)){
+                        needImeFix = false;
+                    }
+                    // check the string between addition and cursorPos, check if it might be IME on.
+                    else{
+                        const regStrMayIMEon = /^[a-zA-Z]+[a-zA-Z' ]*[a-zA-Z]$|^[a-zA-Z]$/;
+                        if (!regStrMayIMEon.test(gapString) || /[' ]{2}/.test(gapString)){
+                            needImeFix = false;
+                        }
+                    }
+                }
+                else{
+                    needImeFix = false;
+                }
+
+                if (!cursorNearby && (!fixIMEProblem || !needImeFix)) {
                     builder.add(from, to, Decoration.replace({
                         widget: addition.widget
                     }));
