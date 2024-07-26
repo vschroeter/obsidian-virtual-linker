@@ -356,7 +356,7 @@ class AutoLinkerPlugin implements PluginValue {
                 if (additionIsInCurrentLine && cursorPos > to){
                     let gapString = view.state.sliceDoc(to, cursorPos);
                     let strBeforeAdd = view.state.sliceDoc(lineStart, from);
-                    const regAddInLineStart = /(^\s*$)|(^\s*- +$)|(^\s*#{1,6} $)|(^\s*>+ *$)|(^\s*- +#{1,6} $)/;
+                    const regAddInLineStart = /(^\s*$)|(^\s*- +$)|(^\s*#{1,6} $)|(^\s*>+ *$)|(^\s*- +#{1,6} +$)|(^\s*> \[![\w-]+\][+-]? +$)/;
                     // check add is at line start
                     if (!regAddInLineStart.test(strBeforeAdd)){
                         needImeFix = false;
