@@ -136,9 +136,12 @@ class AutoLinkerPlugin implements PluginValue {
     update(update: ViewUpdate, force: boolean = false) {
         const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
 
-        // Method to check if the update is on the active view
+        // Check if the update is on the active view. We only need to check this, if one of the following settings is enabled
+        // - fixIMEProblem
+        // - excludeLinksToOwnNote
+        // - excludeLinksInCurrentLine
         let updateIsOnActiveView = false;
-        if (this.settings.excludeLinksInCurrentLine || this.settings.excludeLinksToOwnNote) {
+        if (this.settings.fixIMEProblem || this.settings.excludeLinksInCurrentLine || this.settings.excludeLinksToOwnNote) {
             const domFromUpdate = update.view.dom;
             const domFromWorkspace = activeView?.contentEl;
             updateIsOnActiveView = domFromWorkspace ? isDescendant(domFromWorkspace, domFromUpdate, 3) : false;
@@ -261,7 +264,7 @@ class AutoLinkerPlugin implements PluginValue {
                     for (const excludedType of excludedTypes) {
                         if (type.contains(excludedType)) {
                             excludedIntervalTree.insert([node.from, node.to]);
-                            
+
                             // internal-link --> Apples ... without the exact path
                             // internal-link_link-has-alias --> Dir/File.md
                             if (type.contains("internal-link_link-has-alias") || type.endsWith("internal-link")) {
@@ -281,8 +284,8 @@ class AutoLinkerPlugin implements PluginValue {
 
 
             const filteredAdditions = [];
-            const additionsToDelete: Map<number, boolean> = new Map(); 
-            
+            const additionsToDelete: Map<number, boolean> = new Map();
+
             // Delete additions that links to already linked files
             if (this.settings.excludeLinksToRealLinkedFiles) {
                 for (const addition of additions) {
@@ -323,7 +326,7 @@ class AutoLinkerPlugin implements PluginValue {
                         if (additionsToDelete.has(otherAddition.id)) {
                             continue;
                         }
-    
+
                         if (otherAddition.file === addition.file) {
                             additionsToDelete.set(otherAddition.id, true);
                         }
@@ -337,12 +340,16 @@ class AutoLinkerPlugin implements PluginValue {
                 }
             }
 
-
             // Get the cursor position
             const cursorPos = view.state.selection.main.from;
 
-            // Get the line start and end positions if we want to exclude links in the current line
+            // Settings if we want to adapt links in the current line / fix IME problem
             const excludeLine = viewIsActive && this.settings.excludeLinksInCurrentLine;
+            const fixIMEProblem = viewIsActive && this.settings.fixIMEProblem;
+            let needImeFix = false;
+
+            // Get the line start and end positions if we want to exclude links in the current line
+            // or if we want to fix the IME problem
             const lineStart = view.state.doc.lineAt(cursorPos).from;
             const lineEnd = view.state.doc.lineAt(cursorPos).to;
 
@@ -352,7 +359,40 @@ class AutoLinkerPlugin implements PluginValue {
 
                 const additionIsInCurrentLine = from >= lineStart && to <= lineEnd;
 
-                if (!cursorNearby && (!excludeLine || !additionIsInCurrentLine)) {
+                if (fixIMEProblem) {
+                    needImeFix = true;                    
+                    if (additionIsInCurrentLine && cursorPos > to) {
+                        let gapString = view.state.sliceDoc(to, cursorPos);
+                        let strBeforeAdd = view.state.sliceDoc(lineStart, from);
+                        
+                        // Regex to check if a part of a word is at the line start, because IME problem only occurs at line start
+                        // Regex matches parts that:
+                        // - are completely empty or contain only whitespace.
+                        // - start with a hyphen followed by one or more spaces.
+                        // - start with 1 to 6 hash symbols followed by a space.
+                        // - start with one or more greater-than signs followed by optional whitespace.
+                        // - start with a hyphen followed by one or more spaces, then 1 to 6 hash symbols, and then one or more spaces.
+                        // - start with a greater-than sign followed by a space, an exclamation mark within square brackets containing word characters or hyphens, an optional plus or minus sign, and one or more spaces.
+                        const regAddInLineStart = /(^\s*$)|(^\s*- +$)|(^\s*#{1,6} $)|(^\s*>+ *$)|(^\s*- +#{1,6} +$)|(^\s*> \[![\w-]+\][+-]? +$)/;
+                        
+                        // check add is at line start
+                        if (!regAddInLineStart.test(strBeforeAdd)) {
+                            needImeFix = false;
+                        }
+                        // check the string between addition and cursorPos, check if it might be IME on.
+                        else {
+                            const regStrMayIMEon = /^[a-zA-Z]+[a-zA-Z' ]*[a-zA-Z]$|^[a-zA-Z]$/;
+                            if (!regStrMayIMEon.test(gapString) || /[' ]{2}/.test(gapString)) {
+                                needImeFix = false;
+                            }
+                        }
+                    }
+                    else {
+                        needImeFix = false;
+                    }
+                }
+                
+                if (!cursorNearby && !needImeFix && !(excludeLine && additionIsInCurrentLine)) {
                     builder.add(from, to, Decoration.replace({
                         widget: addition.widget
                     }));

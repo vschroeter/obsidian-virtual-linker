@@ -31,6 +31,7 @@ export interface LinkerPluginSettings {
 	tagToExcludeFile: string;
 	tagToIncludeFile: string;
 	excludeLinksToOwnNote: boolean;
+	fixIMEProblem: boolean;
 	excludeLinksInCurrentLine: boolean;
 	onlyLinkOnce: boolean;
 	excludeLinksToRealLinkedFiles: boolean;
@@ -53,6 +54,7 @@ const DEFAULT_SETTINGS: LinkerPluginSettings = {
 	tagToExcludeFile: "linker-exclude",
 	tagToIncludeFile: "linker-include",
 	excludeLinksToOwnNote: true,
+	fixIMEProblem: false,
 	excludeLinksInCurrentLine: false,
 	onlyLinkOnce: true,
 	excludeLinksToRealLinkedFiles: true,
@@ -535,10 +537,23 @@ class LinkerSettingTab extends PluginSettingTab {
 				);
 		}
 
+		// Toggle setting to exclude links in the current line start for fixing IME
+		new Setting(containerEl)
+			.setName("Fix IME problem")
+			.setDesc("If activated, there will be no links in the current line start which is followed immediately by the Input Method Editor (IME). This is the recommended setting if you are using IME (input method editor) for typing, e.g. for chinese characters, because instant linking might interfere with IME.")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.fixIMEProblem)
+					.onChange(async (value) => {
+						// console.log("Exclude links in current line: " + value);
+						await this.plugin.updateSettings({ fixIMEProblem: value });
+					})
+			);
+
 		// Toggle setting to exclude links in the current line
 		new Setting(containerEl)
 			.setName("Avoid linking in current line")
-			.setDesc("If activated, there will be no links in the current line. This is the recommended setting if you are using IME (input method editor) for typing, e.g. for chinese characters, because instant linking might interfere with IME.")
+			.setDesc("If activated, there will be no links in the current line.")
 			.addToggle((toggle) =>
 				toggle
 					.setValue(this.plugin.settings.excludeLinksInCurrentLine)

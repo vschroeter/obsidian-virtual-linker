@@ -228,6 +228,8 @@ export class PrefixTree {
         let files = new Array<TFile>();
         const allFiles = this.app.vault.getMarkdownFiles();
 
+        allFiles.forEach((f) => currentVaultFiles.add(f.path));
+
         // If the number of files has changed, update all files
         if (allFiles.length != this.setIndexedFilePaths.size || !updateFiles || updateFiles.length == 0) {
             files = allFiles;
@@ -239,8 +241,6 @@ export class PrefixTree {
         }
 
         for (const file of files) {
-            currentVaultFiles.add(file.path);
-
             // Get the update time of the file
             const mtime = file.stat.mtime;
 
