@@ -11,7 +11,7 @@ import {
 
 import { GlossaryLinker } from "./linker/readModeLinker";
 import { liveLinkerPlugin } from "./linker/liveLinker";
-import { ExternalUpdateManager } from "linker/linkerCache";
+import { ExternalUpdateManager, LinkerCache } from "linker/linkerCache";
 import { LinkerMetaInfoFetcher } from "linker/linkerInfo";
 
 export interface LinkerPluginSettings {
@@ -66,6 +66,11 @@ export default class LinkerPlugin extends Plugin {
 
 	async onload() {
 		await this.loadSettings();
+		
+		// Set callback to update the cache when the settings are changed
+		this.updateManager.registerCallback(() => {
+			LinkerCache.getInstance(this.app, this.settings).clearCache();
+		});
 
 		// Register the glossary linker for the read mode
 		this.registerMarkdownPostProcessor((element, context) => {

@@ -56,6 +56,14 @@ export class PrefixTree {
         this.updateTree();
     }
 
+    clear() {
+        this.root = new PrefixNode();
+        this._currentNodes = [];
+        this.setIndexedFilePaths.clear();
+        this.mapIndexedFilePathsToUpdateTime.clear();
+        this.mapFilePathToLeaveNodes.clear();
+    }
+
     getCurrentMatchNodes(index: number, excludedNote?: TFile | null): MatchNode[] {
         const matchNodes: MatchNode[] = [];
 
@@ -156,7 +164,7 @@ export class PrefixTree {
         const metadata = this.app.metadataCache.getFileCache(file);
         const aliases = metadata?.frontmatter?.aliases ?? [];
 
-        let names = [file.basename]; //
+        let names = [file.basename];
         if (aliases) {
             names.push(...aliases);
         }
@@ -333,6 +341,10 @@ export class LinkerCache {
             LinkerCache.instance = new LinkerCache(app, settings);
         }
         return LinkerCache.instance;
+    }
+
+    clearCache() {
+        this.cache.clear();
     }
 
     reset() {
