@@ -162,10 +162,18 @@ export class PrefixTree {
         }
 
         const metadata = this.app.metadataCache.getFileCache(file);
-        const aliases = metadata?.frontmatter?.aliases ?? [];
+        let aliases: string[] = metadata?.frontmatter?.aliases ?? [];
+
+        // If aliases is not an array, convert it to an array
+        if (!Array.isArray(aliases)) {
+            aliases = [aliases];
+        }
+
+        // Filter out empty aliases
+        aliases = aliases.filter((alias) => alias && alias.trim().length > 0)
 
         let names = [file.basename];
-        if (aliases) {
+        if (aliases && this.settings.includeAliases) {
             names.push(...aliases);
         }
 

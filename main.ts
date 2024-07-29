@@ -35,6 +35,7 @@ export interface LinkerPluginSettings {
 	excludeLinksInCurrentLine: boolean;
 	onlyLinkOnce: boolean;
 	excludeLinksToRealLinkedFiles: boolean;
+	includeAliases: boolean;
 }
 
 const DEFAULT_SETTINGS: LinkerPluginSettings = {
@@ -58,6 +59,7 @@ const DEFAULT_SETTINGS: LinkerPluginSettings = {
 	excludeLinksInCurrentLine: false,
 	onlyLinkOnce: true,
 	excludeLinksToRealLinkedFiles: true,
+	includeAliases: true,
 };
 
 export default class LinkerPlugin extends Plugin {
@@ -418,8 +420,6 @@ class LinkerSettingTab extends PluginSettingTab {
 
 		containerEl.empty();
 
-		new Setting(containerEl).setName("Matching behavior").setHeading();
-
 		// Toggle to activate or deactivate the linker
 		new Setting(containerEl)
 			.setName("Activate Virtual Linker")
@@ -429,6 +429,21 @@ class LinkerSettingTab extends PluginSettingTab {
 					.onChange(async (value) => {
 						// console.log("Linker activated: " + value);
 						await this.plugin.updateSettings({ linkerActivated: value });
+					})
+			);
+
+		new Setting(containerEl).setName("Matching behavior").setHeading();
+
+		// Toggle to include aliases
+		new Setting(containerEl)
+			.setName("Include aliases")
+			.setDesc("If activated, the virtual linker will also include aliases for the files.")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.includeAliases)
+					.onChange(async (value) => {
+						// console.log("Include aliases: " + value);
+						await this.plugin.updateSettings({ includeAliases: value });
 					})
 			);
 
