@@ -6,6 +6,7 @@ import {
 	PluginSettingTab,
 	Setting,
 	TAbstractFile,
+	TFile,
 	TFolder,
 } from "obsidian";
 
@@ -171,20 +172,29 @@ export default class LinkerPlugin extends Plugin {
 								const text = targetElement.getAttribute('origin-text') || '';
 								const target = file;
 								const activeFile = app.workspace.getActiveFile();
-								const activeFilePath = activeFile?.path;
-
-
-								// Create the replacement
-								let replacement = "";
-								if (settings.useMarkdownLinks) {
-									replacement = `[${text}](${target.path})`;
-								} else {
-									replacement = `[[${target.path}|${text}]]`;
-								}
+								const activeFilePath = activeFile?.path ?? '';
 
 								if (!activeFile) {
 									console.error('No active file');
 									return;
+								}
+
+								const replacementPath = app.metadataCache.fileToLinktext(target as TFile, activeFilePath);
+
+								// Create the replacement
+								let replacement = "";
+
+								// If the file is the same as the shown text, and we can use short links, we use them
+								if (replacementPath === text) {
+									replacement = `[[${replacementPath}]]`;
+								}
+								// Otherwise create a specific link, using the shown text
+								else {
+									if (settings.useMarkdownLinks) {
+										replacement = `[${text}](${target.path})`;
+									} else {
+										replacement = `[[${target.path}|${text}]]`;
+									}
 								}
 
 								// Replace the text
@@ -398,7 +408,6 @@ export default class LinkerPlugin extends Plugin {
 		const fileContent = await this.app.vault.adapter.read(this.app.vault.configDir + '/app.json');
 		const appSettings = JSON.parse(fileContent);
 		this.settings.useMarkdownLinks = appSettings.useMarkdownLinks;
-
 	}
 
 
