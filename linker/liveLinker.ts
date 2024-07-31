@@ -246,6 +246,7 @@ class AutoLinkerPlugin implements PluginValue {
                 "code-block",
                 "internal-link",
                 "link",
+                "url",
             ]
 
             if (!this.settings.includeHeaders) {
@@ -259,7 +260,9 @@ class AutoLinkerPlugin implements PluginValue {
                 from,
                 to,
                 enter(node) {
-                    // const text = view.state.doc.sliceString(node.from, node.to);
+                    const text = view.state.doc.sliceString(node.from, node.to);
+                    console.log(node.type.name, node.from, node.to, text)
+
                     const type = node.type.name;
                     for (const excludedType of excludedTypes) {
                         if (type.contains(excludedType)) {
