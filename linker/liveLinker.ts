@@ -180,6 +180,12 @@ class AutoLinkerPlugin implements PluginValue {
         const dom = view.dom;
         const mappedFile = this.viewUpdateDomToFileMap.get(dom);
 
+        // Set to exclude file that are explicitly linked
+        const explicitlyLinkedFiles = new Set<TFile>();
+
+        // Set to exclude files that are already linked by a virtual link
+        const alreadyLinkedFiles = new Set<TFile>();
+
         for (let { from, to } of view.visibleRanges) {
 
             this.linkerCache.reset();
@@ -254,7 +260,6 @@ class AutoLinkerPlugin implements PluginValue {
             }
 
             // We also want to exclude links to files that are already linked by a real link
-            const explicitlyLinkedFiles = new Set<TFile>();
             const app = this.app;
             syntaxTree(view.state).iterate({
                 from,
@@ -262,7 +267,7 @@ class AutoLinkerPlugin implements PluginValue {
                 enter(node) {
                     // const text = view.state.doc.sliceString(node.from, node.to);
                     // console.log(node.type.name, node.from, node.to, text)
-                    
+
                     const type = node.type.name;
                     for (const excludedType of excludedTypes) {
                         if (type.contains(excludedType)) {
@@ -270,9 +275,10 @@ class AutoLinkerPlugin implements PluginValue {
 
                             // internal-link --> Apples ... without the exact path
                             // internal-link_link-has-alias --> Dir/File.md
-                            if (type.contains("internal-link_link-has-alias") || type.endsWith("internal-link")) {
+                            if (type.contains("internal-link_link-has-alias") || type.endsWith("internal-link") || type == "string_url") {
                                 const text = view.state.doc.sliceString(node.from, node.to);
                                 const linkedFile = app.metadataCache.getFirstLinkpathDest(text, mappedFile?.path ?? "")
+                                // console.log("Internal link", node.from, node.to, node.type.name, linkedFile)
                                 // console.log(node.type.name, node.from, node.to, text, linkedFile)
                                 if (linkedFile) {
                                     explicitlyLinkedFiles.add(linkedFile);
@@ -293,6 +299,15 @@ class AutoLinkerPlugin implements PluginValue {
             if (this.settings.excludeLinksToRealLinkedFiles) {
                 for (const addition of additions) {
                     if (explicitlyLinkedFiles.has(addition.file)) {
+                        additionsToDelete.set(addition.id, true);
+                    }
+                }
+            }
+
+            // Delete additions that links to already linked files
+            if (this.settings.onlyLinkOnce) {
+                for (const addition of additions) {
+                    if (alreadyLinkedFiles.has(addition.file)) {
                         additionsToDelete.set(addition.id, true);
                     }
                 }
@@ -340,6 +355,7 @@ class AutoLinkerPlugin implements PluginValue {
             for (const addition of additions) {
                 if (!additionsToDelete.has(addition.id)) {
                     filteredAdditions.push(addition);
+                    alreadyLinkedFiles.add(addition.file);
                 }
             }
 
