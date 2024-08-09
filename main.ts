@@ -206,9 +206,9 @@ export default class LinkerPlugin extends Plugin {
 								// Otherwise create a specific link, using the shown text
 								else {
 									if (settings.useMarkdownLinks) {
-										replacement = `[${text}](${target.path})`;
+										replacement = `[${text}](${replacementPath})`;
 									} else {
-										replacement = `[[${target.path}|${text}]]`;
+										replacement = `[[${replacementPath}|${text}]]`;
 									}
 								}
 
