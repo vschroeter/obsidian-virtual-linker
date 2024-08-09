@@ -239,6 +239,9 @@ export class GlossaryLinker extends MarkdownRenderChild {
 							link.classList.add("internal-link");
 							// link.classList.add("glossary-entry");
 							link.classList.add("virtual-link-a");
+							// link.setAttribute("from", addition.from.toString());
+							// link.setAttribute("to", addition.to.toString());
+							link.setAttribute("origin-text", this.text);
 
 							link.target = "_blank";
 							link.rel = "noopener";

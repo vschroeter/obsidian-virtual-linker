@@ -155,9 +155,19 @@ export default class LinkerPlugin extends Plugin {
 				// Check, if we are clicking on a virtual link inside a note or a note in the file explorer
 				const isVirtualLink = targetElement.classList.contains('virtual-link-a');
 
+				const from = parseInt(targetElement.getAttribute('from') || '-1');
+				const to = parseInt(targetElement.getAttribute('to') || '-1');
 
+				if (from === -1 || to === -1) {
+					menu.addItem((item) => {
+
+						// Item to convert a virtual link to a real link
+						item.setTitle("[Virtual Linker] Converting to real link is not possible in read mode, switch to edit or source mode to convert.")
+							.setIcon("link")
+					});
+				} 
 				// Check, if the element has the "virtual-link" class
-				if (isVirtualLink) {
+				else if (isVirtualLink) {
 					menu.addItem((item) => {
 
 						// Item to convert a virtual link to a real link
@@ -167,6 +177,11 @@ export default class LinkerPlugin extends Plugin {
 								// Get from and to position from the element
 								const from = parseInt(targetElement.getAttribute('from') || '-1');
 								const to = parseInt(targetElement.getAttribute('to') || '-1');
+
+								if (from === -1 || to === -1) {
+									console.error('No from or to position');
+									return;
+								}
 
 								// Get the shown text
 								const text = targetElement.getAttribute('origin-text') || '';
@@ -191,9 +206,9 @@ export default class LinkerPlugin extends Plugin {
 								// Otherwise create a specific link, using the shown text
 								else {
 									if (settings.useMarkdownLinks) {
-										replacement = `[${text}](${target.path})`;
+										replacement = `[${text}](${replacementPath})`;
 									} else {
-										replacement = `[[${target.path}|${text}]]`;
+										replacement = `[[${replacementPath}|${text}]]`;
 									}
 								}
 
