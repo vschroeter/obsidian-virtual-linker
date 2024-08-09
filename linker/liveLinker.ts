@@ -250,6 +250,7 @@ class AutoLinkerPlugin implements PluginValue {
             const excludedTypes = [
                 "codeblock",
                 "code-block",
+                "inline-code",
                 "internal-link",
                 "link",
                 "url",
