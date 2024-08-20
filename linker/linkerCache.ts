@@ -120,6 +120,11 @@ export class PrefixTree {
 
     private addFileToTree(file: TFile) {
         const path = file.path;
+
+        if (!file || !path) {
+            return;
+        }
+
         // Remove the old nodes of the file
         this.removeFileFromTree(file);
 
@@ -133,7 +138,7 @@ export class PrefixTree {
         // Get the tags of the file
         // and normalize them by removing the # in front of tags
         const tags = (getAllTags(this.app.metadataCache.getFileCache(file)!!) ?? [])
-            .filter((tag) => tag.trim().length > 0)
+            .filter((tag) => tag && tag.trim().length > 0)
             .map((tag) => (tag.startsWith("#") ? tag.slice(1) : tag));
 
         const includeFile = metaInfo.includeFile;
@@ -170,7 +175,11 @@ export class PrefixTree {
         }
 
         // Filter out empty aliases
-        aliases = aliases.filter((alias) => alias && alias.trim().length > 0)
+        try {
+            aliases = aliases.filter((alias) => alias && alias.trim().length > 0)
+        } catch (e) {
+            console.error("[VL LC] Error filtering aliases", aliases, e);
+        }
 
         let names = [file.basename];
         if (aliases && this.settings.includeAliases) {
@@ -267,7 +276,11 @@ export class PrefixTree {
             // console.log("Updating", file, file.stat.mtime, this.mapIndexedFilePathsToUpdateTime.get(file.path));
 
             // Otherwise, add the file to the tree
-            this.addFileToTree(file);
+            try {
+                this.addFileToTree(file);
+            } catch (e) {
+                console.error("[VL LC] Error adding file to tree", file, e);
+            }
         }
 
         // Remove files that are no longer in the vault
