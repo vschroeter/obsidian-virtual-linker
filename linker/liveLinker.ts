@@ -185,8 +185,9 @@ class AutoLinkerPlugin implements PluginValue {
         if (excludedFolders.length > 0) {
             const path = mappedFile?.parent?.path ?? this.app.workspace.getActiveFile()?.parent?.path;
             if (excludedFolders.includes(path ?? ""))
-                return builder.finish();            
+                return builder.finish();
         }
+
 
         // Set to exclude file that are explicitly linked
         const explicitlyLinkedFiles = new Set<TFile>();
@@ -274,26 +275,34 @@ class AutoLinkerPlugin implements PluginValue {
                 from,
                 to,
                 enter(node) {
-                    // const text = view.state.doc.sliceString(node.from, node.to);
-                    // console.log(node.type.name, node.from, node.to, text)
-
                     const type = node.type.name;
+                    const types = type.split("_");
+                    // const text = view.state.doc.sliceString(node.from, node.to);
+                    // console.log(text, node.type.name, types, node.from, node.to)
+
                     for (const excludedType of excludedTypes) {
                         if (type.contains(excludedType)) {
                             excludedIntervalTree.insert([node.from, node.to]);
 
-                            // internal-link --> Apples ... without the exact path
-                            // internal-link_link-has-alias --> Dir/File.md
-                            if (type.contains("internal-link_link-has-alias") || type.endsWith("internal-link") || type == "string_url") {
-                                const text = view.state.doc.sliceString(node.from, node.to);
-                                const linkedFile = app.metadataCache.getFirstLinkpathDest(text, mappedFile?.path ?? "")
-                                // console.log("Internal link", node.from, node.to, node.type.name, linkedFile)
-                                // console.log(node.type.name, node.from, node.to, text, linkedFile)
-                                if (linkedFile) {
-                                    explicitlyLinkedFiles.add(linkedFile);
-                                }
+                            // Types can be combined, e.g. internal-link_link-has-alias
+                            // These combined types are separated by underscores
+                            const isLinkIfHavingTypes = [
+                                ["string", "url"],
+                                "hmd-internal-link",
+                                "internal-link",
+                            ]
 
-                            }
+                            isLinkIfHavingTypes.forEach(t => {
+                                const tList = Array.isArray(t) ? t : [t];
+
+                                if (tList.every(tt => types.includes(tt))) {
+                                    const text = view.state.doc.sliceString(node.from, node.to);
+                                    const linkedFile = app.metadataCache.getFirstLinkpathDest(text, mappedFile?.path ?? "")
+                                    if (linkedFile) {
+                                        explicitlyLinkedFiles.add(linkedFile);
+                                    }
+                                }
+                            })
                         }
                     }
 
@@ -388,11 +397,11 @@ class AutoLinkerPlugin implements PluginValue {
                 const additionIsInCurrentLine = from >= lineStart && to <= lineEnd;
 
                 if (fixIMEProblem) {
-                    needImeFix = true;                    
+                    needImeFix = true;
                     if (additionIsInCurrentLine && cursorPos > to) {
                         let gapString = view.state.sliceDoc(to, cursorPos);
                         let strBeforeAdd = view.state.sliceDoc(lineStart, from);
-                        
+
                         // Regex to check if a part of a word is at the line start, because IME problem only occurs at line start
                         // Regex matches parts that:
                         // - are completely empty or contain only whitespace.
@@ -402,7 +411,7 @@ class AutoLinkerPlugin implements PluginValue {
                         // - start with a hyphen followed by one or more spaces, then 1 to 6 hash symbols, and then one or more spaces.
                         // - start with a greater-than sign followed by a space, an exclamation mark within square brackets containing word characters or hyphens, an optional plus or minus sign, and one or more spaces.
                         const regAddInLineStart = /(^\s*$)|(^\s*- +$)|(^\s*#{1,6} $)|(^\s*>+ *$)|(^\s*- +#{1,6} +$)|(^\s*> \[![\w-]+\][+-]? +$)/;
-                        
+
                         // check add is at line start
                         if (!regAddInLineStart.test(strBeforeAdd)) {
                             needImeFix = false;
@@ -419,7 +428,7 @@ class AutoLinkerPlugin implements PluginValue {
                         needImeFix = false;
                     }
                 }
-                
+
                 if (!cursorNearby && !needImeFix && !(excludeLine && additionIsInCurrentLine)) {
                     builder.add(from, to, Decoration.replace({
                         widget: addition.widget
