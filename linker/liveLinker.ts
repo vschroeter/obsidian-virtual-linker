@@ -180,6 +180,14 @@ class AutoLinkerPlugin implements PluginValue {
         const dom = view.dom;
         const mappedFile = this.viewUpdateDomToFileMap.get(dom);
 
+        // Check if the file is inside excluded folders
+        const excludedFolders = this.settings.excludedDirectoriesForLinking;
+        if (excludedFolders.length > 0) {
+            const path = mappedFile?.parent?.path ?? this.app.workspace.getActiveFile()?.parent?.path;
+            if (excludedFolders.includes(path ?? ""))
+                return builder.finish();            
+        }
+
         // Set to exclude file that are explicitly linked
         const explicitlyLinkedFiles = new Set<TFile>();
 

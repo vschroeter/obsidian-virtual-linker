@@ -5,18 +5,6 @@ import {
 import { LinkerPluginSettings } from "../main";
 import { LinkerCache, PrefixTree } from "./linkerCache";
 
-class GlossaryFile {
-	name: string;
-	file: TFile;
-	aliases: string[];
-
-	constructor(file: TFile, aliases: string[] = []) {
-		this.file = file;
-		this.name = file.basename;
-		this.aliases = aliases;
-	}
-}
-
 export class GlossaryLinker extends MarkdownRenderChild {
 	text: string;
 	ctx: MarkdownPostProcessorContext;

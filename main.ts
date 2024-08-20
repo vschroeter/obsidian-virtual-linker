@@ -22,6 +22,7 @@ export interface LinkerPluginSettings {
 	includeAllFiles: boolean;
 	linkerDirectories: string[];
 	excludedDirectories: string[];
+	excludedDirectoriesForLinking: string[];
 	glossarySuffix: string;
 	useMarkdownLinks: boolean;
 	applyDefaultLinkStyling: boolean;
@@ -46,6 +47,7 @@ const DEFAULT_SETTINGS: LinkerPluginSettings = {
 	includeAllFiles: true,
 	linkerDirectories: ["Glossary"],
 	excludedDirectories: [],
+	excludedDirectoriesForLinking: [],
 	glossarySuffix: "🔗",
 	useMarkdownLinks: false,
 	applyDefaultLinkStyling: true,
@@ -650,7 +652,7 @@ class LinkerSettingTab extends PluginSettingTab {
 		} else {
 			new Setting(containerEl)
 				.setName("Excluded directories")
-				.setDesc("Directories to exclude for the virtual linker (separated by new lines).")
+				.setDesc("Directories from which files are to be excluded for the virtual linker (separated by new lines). Files in these directories will not create any virtual links in other files.")
 				.addTextArea((text) => {
 					let setValue = "";
 					try {
@@ -712,6 +714,31 @@ class LinkerSettingTab extends PluginSettingTab {
 					})
 			);
 
+		
+		// Setting to exclude directories from the linker to be executed
+		new Setting(containerEl)
+			.setName("Excluded directories for generating virtual links")
+			.setDesc("Directories in which the plugin will not create virtual links (separated by new lines).")
+			.addTextArea((text) => {
+				let setValue = "";
+				try {
+					setValue = this.plugin.settings.excludedDirectoriesForLinking.join("\n");
+				} catch (e) {
+					console.warn(e);
+				}
+
+				text.setPlaceholder("List of directory names (separated by new line)")
+					.setValue(setValue)
+					.onChange(async (value) => {
+						this.plugin.settings.excludedDirectoriesForLinking = value.split("\n").map((x) => x.trim()).filter((x) => x.length > 0);
+						// console.log("New folder name: " + value, this.plugin.settings.excludedDirectoriesForLinking);
+						await this.plugin.updateSettings();
+					});
+
+				// Set default size
+				text.inputEl.addClass('linker-settings-text-box')
+			});
+		
 
 		new Setting(containerEl).setName("Link style").setHeading();
 
