@@ -118,6 +118,10 @@ export class PrefixTree {
         // console.log("Adding file", file, name);
     }
 
+    private static isNoneEmptyString(value: string | null | undefined): value is string {
+        return value !== null && value !== undefined && typeof value === "string" && value.trim().length > 0;
+    }
+
     private addFileToTree(file: TFile) {
         const path = file.path;
 
@@ -138,7 +142,7 @@ export class PrefixTree {
         // Get the tags of the file
         // and normalize them by removing the # in front of tags
         const tags = (getAllTags(this.app.metadataCache.getFileCache(file)!!) ?? [])
-            .filter((tag) => tag && tag.trim().length > 0)
+            .filter(PrefixTree.isNoneEmptyString)
             .map((tag) => (tag.startsWith("#") ? tag.slice(1) : tag));
 
         const includeFile = metaInfo.includeFile;
@@ -176,7 +180,7 @@ export class PrefixTree {
 
         // Filter out empty aliases
         try {
-            aliases = aliases.filter((alias) => alias && alias.trim().length > 0)
+            aliases = aliases.filter(PrefixTree.isNoneEmptyString);
         } catch (e) {
             console.error("[VL LC] Error filtering aliases", aliases, e);
         }
@@ -186,7 +190,7 @@ export class PrefixTree {
             names.push(...aliases);
         }
 
-        names = names.filter((name) => name && name.trim().length > 0);
+        names = names.filter(PrefixTree.isNoneEmptyString);
 
         // console.log(aliases, tags, names);
 
