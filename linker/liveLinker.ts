@@ -263,6 +263,7 @@ class AutoLinkerPlugin implements PluginValue {
                 "internal-link",
                 "link",
                 "url",
+                "hashtag"
             ]
 
             if (!this.settings.includeHeaders) {
