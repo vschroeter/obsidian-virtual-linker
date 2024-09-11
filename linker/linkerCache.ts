@@ -151,6 +151,17 @@ export class PrefixTree {
         return value !== null && value !== undefined && typeof value === "string" && value.trim().length > 0;
     }
 
+    private static isUpperCaseString(value: string | null | undefined, upperCasePart = 0.75) {
+        if (!PrefixTree.isNoneEmptyString(value)) {
+            return false;
+        }
+
+        const length = value.length;
+        const upperCaseChars = value.split("").filter((char) => char === char.toUpperCase()).length;
+
+        return upperCaseChars / length >= upperCasePart;
+    }
+
     private addFileToTree(file: TFile) {
         const path = file.path;
 
@@ -205,10 +216,10 @@ export class PrefixTree {
         let aliasesWithMatchCase: Set<string> = new Set(metadata?.frontmatter?.["linker-match-case"] ?? []);
         let aliasesWithIgnoreCase: Set<string> = new Set(metadata?.frontmatter?.["linker-ignore-case"] ?? []);
 
-        if (aliasesWithMatchCase.size > 0 || aliasesWithIgnoreCase.size > 0) {
-            console.log("Aliases with match case", aliasesWithMatchCase, file.basename);
-            console.log("Aliases with ignore case", aliasesWithIgnoreCase, file.basename);
-        }
+        // if (aliasesWithMatchCase.size > 0 || aliasesWithIgnoreCase.size > 0) {
+        //     console.log("Aliases with match case", aliasesWithMatchCase, file.basename);
+        //     console.log("Aliases with ignore case", aliasesWithIgnoreCase, file.basename);
+        // }
 
         // If aliases is not an array, convert it to an array
         if (!Array.isArray(aliases)) {
@@ -232,32 +243,25 @@ export class PrefixTree {
         let namesWithCaseIgnore = new Array<string>();
         let namesWithCaseMatch = new Array<string>();
 
-        // console.log(aliases, tags, names);
-
         // Check if the file should match case sensitive
         if (this.settings.matchCaseSensitive) {
             let lowerCaseNames = new Array<string>();
             if (tags.includes(this.settings.tagToIgnoreCase)) {
                 namesWithCaseIgnore = [...names];
-                lowerCaseNames = names.filter((name) => !aliasesWithMatchCase.has(name));
             } else {
                 namesWithCaseMatch = [...names];
-                lowerCaseNames = names.filter((name) => aliasesWithIgnoreCase.has(name));
             }
             lowerCaseNames = lowerCaseNames.map((name) => name.toLowerCase());
             names.push(...lowerCaseNames);
         } else {
             let lowerCaseNames = new Array<string>();
-            if (!tags.includes(this.settings.tagToMatchCase)) {
-                namesWithCaseIgnore = [...names];
+            if (tags.includes(this.settings.tagToMatchCase)) {
+                namesWithCaseMatch = [...names];
                 lowerCaseNames = names.filter((name) => aliasesWithIgnoreCase.has(name));
             } else {
-                namesWithCaseMatch = [...names];
-                lowerCaseNames = names.filter((name) => !aliasesWithMatchCase.has(name));
+                namesWithCaseMatch = [...names].filter((name) => PrefixTree.isUpperCaseString(name) && !aliasesWithIgnoreCase.has(name));
+                namesWithCaseIgnore = [...names].filter((name) => !namesWithCaseMatch.includes(name));
             }
-
-            lowerCaseNames = lowerCaseNames.map((name) => name.toLowerCase());
-            names.push(...lowerCaseNames);
         }
 
         const namesToMoveFromIgnoreToMatch = namesWithCaseIgnore.filter((name) => aliasesWithMatchCase.has(name));
@@ -277,10 +281,6 @@ export class PrefixTree {
         namesWithCaseMatch.forEach((name) => {
             this.addFileWithName(name, file, true);
         });
-
-        // for (const name of names) {
-        // 	this.addFileWithName(name, file);
-        // }
     }
 
     private removeFileFromTree(file: TFile | string) {
@@ -383,9 +383,7 @@ export class PrefixTree {
     pushChar(char: string) {
         const newNodes: VisitedPrefixNode[] = [];
         const chars = [char];
-        if (!this.settings.matchCaseSensitive) {
-            chars.push(char.toLowerCase());
-        }
+        chars.push(char.toLowerCase());
 
         chars.forEach((c) => {
             // char = char.toLowerCase();
