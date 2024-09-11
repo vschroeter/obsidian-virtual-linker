@@ -28,6 +28,16 @@ export class PrefixNode {
     files: Set<TFile> = new Set();
     charValue: string = "";
     value: string = "";
+    requiresCaseMatch: boolean = false;
+}
+
+export class VisitedPrefixNode {
+    node: PrefixNode;
+    caseIsMatched: boolean;
+    constructor(node: PrefixNode, caseIsMatched: boolean = true) {
+        this.node = node;
+        this.caseIsMatched = caseIsMatched;
+    }
 }
 
 export class MatchNode {
@@ -35,6 +45,8 @@ export class MatchNode {
     length: number = 0;
     files: Set<TFile> = new Set();
     value: string = "";
+    caseIsMatched: boolean = true;
+    requiresCaseMatch: boolean = false;
 
     get end(): number {
         return this.start + this.length;
@@ -45,7 +57,7 @@ export class PrefixTree {
     root: PrefixNode = new PrefixNode();
     fetcher: LinkerMetaInfoFetcher;
 
-    _currentNodes: PrefixNode[] = [];
+    _currentNodes: VisitedPrefixNode[] = [];
 
     setIndexedFilePaths: Set<string> = new Set();
     mapIndexedFilePathsToUpdateTime: Map<string, number> = new Map();
@@ -73,14 +85,30 @@ export class PrefixTree {
 
         // From the current nodes in the trie, get all nodes that have files
         for (const node of this._currentNodes) {
-            if (node.files.size === 0) {
+            if (node.node.files.size === 0) {
                 continue;
             }
             const matchNode = new MatchNode();
-            matchNode.length = node.value.length;
+            matchNode.length = node.node.value.length;
             matchNode.start = index - matchNode.length;
-            matchNode.files = new Set(Array.from(node.files).filter((file) => !excludedNote || file.path !== excludedNote.path));
-            matchNode.value = node.value;
+            matchNode.files = new Set(Array.from(node.node.files).filter((file) => !excludedNote || file.path !== excludedNote.path));
+            matchNode.value = node.node.value;
+            matchNode.requiresCaseMatch = node.node.requiresCaseMatch;
+
+            // Check if the case is matched
+            let currentNode: PrefixNode | undefined = node.node;
+            while (currentNode) {
+                if (!node.caseIsMatched) {
+                    matchNode.caseIsMatched = false;
+                    break;
+                }
+                currentNode = currentNode.parent;
+            }
+
+            if (matchNode.requiresCaseMatch && !matchNode.caseIsMatched) {
+                continue;
+            }
+
             if (matchNode.files.size > 0) {
                 matchNodes.push(matchNode);
             }
@@ -92,7 +120,7 @@ export class PrefixTree {
         return matchNodes;
     }
 
-    private addFileWithName(name: string, file: TFile) {
+    private addFileWithName(name: string, file: TFile, matchCase: boolean) {
         let node = this.root;
 
         // For each character in the name, add a node to the trie
@@ -111,6 +139,7 @@ export class PrefixTree {
 
         // The last node is a leaf node, add the file to the node
         node.files.add(file);
+        node.requiresCaseMatch = matchCase;
 
         // Store the leaf node for the file to be able to remove it later
         const path = file.path;
@@ -120,6 +149,17 @@ export class PrefixTree {
 
     private static isNoneEmptyString(value: string | null | undefined): value is string {
         return value !== null && value !== undefined && typeof value === "string" && value.trim().length > 0;
+    }
+
+    private static isUpperCaseString(value: string | null | undefined, upperCasePart = 0.75) {
+        if (!PrefixTree.isNoneEmptyString(value)) {
+            return false;
+        }
+
+        const length = value.length;
+        const upperCaseChars = value.split("").filter((char) => char === char.toUpperCase()).length;
+
+        return upperCaseChars / length >= upperCasePart;
     }
 
     private addFileToTree(file: TFile) {
@@ -173,6 +213,14 @@ export class PrefixTree {
         const metadata = this.app.metadataCache.getFileCache(file);
         let aliases: string[] = metadata?.frontmatter?.aliases ?? [];
 
+        let aliasesWithMatchCase: Set<string> = new Set(metadata?.frontmatter?.["linker-match-case"] ?? []);
+        let aliasesWithIgnoreCase: Set<string> = new Set(metadata?.frontmatter?.["linker-ignore-case"] ?? []);
+
+        // if (aliasesWithMatchCase.size > 0 || aliasesWithIgnoreCase.size > 0) {
+        //     console.log("Aliases with match case", aliasesWithMatchCase, file.basename);
+        //     console.log("Aliases with ignore case", aliasesWithIgnoreCase, file.basename);
+        // }
+
         // If aliases is not an array, convert it to an array
         if (!Array.isArray(aliases)) {
             aliases = [aliases];
@@ -192,24 +240,47 @@ export class PrefixTree {
 
         names = names.filter(PrefixTree.isNoneEmptyString);
 
-        // console.log(aliases, tags, names);
+        let namesWithCaseIgnore = new Array<string>();
+        let namesWithCaseMatch = new Array<string>();
 
         // Check if the file should match case sensitive
         if (this.settings.matchCaseSensitive) {
+            let lowerCaseNames = new Array<string>();
             if (tags.includes(this.settings.tagToIgnoreCase)) {
-                const lowerCaseNames = names.map((name) => name.toLowerCase());
-                names.push(...lowerCaseNames);
+                namesWithCaseIgnore = [...names];
+            } else {
+                namesWithCaseMatch = [...names];
             }
+            lowerCaseNames = lowerCaseNames.map((name) => name.toLowerCase());
+            names.push(...lowerCaseNames);
         } else {
-            if (!tags.includes(this.settings.tagToMatchCase)) {
-                const lowerCaseNames = names.map((name) => name.toLowerCase());
-                names.push(...lowerCaseNames);
+            let lowerCaseNames = new Array<string>();
+            if (tags.includes(this.settings.tagToMatchCase)) {
+                namesWithCaseMatch = [...names];
+                lowerCaseNames = names.filter((name) => aliasesWithIgnoreCase.has(name));
+            } else {
+                namesWithCaseMatch = [...names].filter((name) => PrefixTree.isUpperCaseString(name) && !aliasesWithIgnoreCase.has(name));
+                namesWithCaseIgnore = [...names].filter((name) => !namesWithCaseMatch.includes(name));
             }
         }
 
-        for (const name of names) {
-            this.addFileWithName(name, file);
-        }
+        const namesToMoveFromIgnoreToMatch = namesWithCaseIgnore.filter((name) => aliasesWithMatchCase.has(name));
+        const namesToMoveFromMatchToIgnore = namesWithCaseMatch.filter((name) => aliasesWithIgnoreCase.has(name));
+
+        namesWithCaseIgnore = namesWithCaseIgnore.filter((name) => !namesToMoveFromIgnoreToMatch.includes(name));
+        namesWithCaseMatch = namesWithCaseMatch.filter((name) => !namesToMoveFromMatchToIgnore.includes(name));
+        namesWithCaseIgnore.push(...namesToMoveFromMatchToIgnore);
+        namesWithCaseMatch.push(...namesToMoveFromIgnoreToMatch);
+
+        namesWithCaseIgnore.push(...namesWithCaseIgnore.map((name) => name.toLowerCase()));
+
+        namesWithCaseIgnore.forEach((name) => {
+            this.addFileWithName(name, file, false);
+        });
+
+        namesWithCaseMatch.forEach((name) => {
+            this.addFileWithName(name, file, true);
+        });
     }
 
     private removeFileFromTree(file: TFile | string) {
@@ -306,27 +377,26 @@ export class PrefixTree {
 
     resetSearch() {
         // this._current = this.root;
-        this._currentNodes = [this.root];
+        this._currentNodes = [new VisitedPrefixNode(this.root)];
     }
 
     pushChar(char: string) {
-        const newNodes: PrefixNode[] = [];
+        const newNodes: VisitedPrefixNode[] = [];
         const chars = [char];
-        if (!this.settings.matchCaseSensitive) {
-            chars.push(char.toLowerCase());
-        }
+        chars.push(char.toLowerCase());
 
         chars.forEach((c) => {
             // char = char.toLowerCase();
             if (!this.settings.matchOnlyWholeWords || PrefixTree.checkWordBoundary(c)) {
-                newNodes.push(this.root);
+                newNodes.push(new VisitedPrefixNode(this.root));
             }
 
             for (const node of this._currentNodes) {
-                const child = node.children.get(c);
+                const child = node.node.children.get(c);
                 if (child) {
-                    if (!newNodes.includes(child)) {
-                        newNodes.push(child);
+                    const newPrefixNodes = newNodes.map((n) => n.node);
+                    if (!newPrefixNodes.includes(child)) {
+                        newNodes.push(new VisitedPrefixNode(child, char == c));
                     }
                 }
             }
@@ -377,6 +447,7 @@ export class LinkerCache {
     }
 
     updateCache(force = false) {
+        // force = true;
         if (!this.app?.workspace?.getActiveFile()) {
             return;
         }

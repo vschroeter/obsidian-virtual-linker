@@ -223,6 +223,8 @@ class AutoLinkerPlugin implements PluginValue {
                             const aFrom = from + nFrom;
                             const aTo = from + nTo;
 
+                            // console.log("MATCH", name, aFrom, aTo, node.caseIsMatched, node.requiresCaseMatch)
+
                             // TODO: Handle multiple files
                             // const file: TFile = node.files.values().next().value;
                             node.files.forEach((file) => {
@@ -263,6 +265,7 @@ class AutoLinkerPlugin implements PluginValue {
                 "internal-link",
                 "link",
                 "url",
+                "hashtag"
             ]
 
             if (!this.settings.includeHeaders) {
