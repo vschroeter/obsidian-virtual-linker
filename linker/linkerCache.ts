@@ -1,7 +1,7 @@
-import { App, getAllTags, parseFrontMatterAliases, TFile, Vault } from "obsidian";
+import { App, getAllTags, parseFrontMatterAliases, TFile, Vault } from 'obsidian';
 
-import { LinkerPluginSettings } from "main";
-import { LinkerMetaInfoFetcher } from "./linkerInfo";
+import { LinkerPluginSettings } from 'main';
+import { LinkerMetaInfoFetcher } from './linkerInfo';
 
 export class ExternalUpdateManager {
     registeredCallbacks: Set<Function> = new Set();
@@ -26,8 +26,8 @@ export class PrefixNode {
     parent: PrefixNode | undefined;
     children: Map<string, PrefixNode> = new Map();
     files: Set<TFile> = new Set();
-    charValue: string = "";
-    value: string = "";
+    charValue: string = '';
+    value: string = '';
     requiresCaseMatch: boolean = false;
 }
 
@@ -44,7 +44,8 @@ export class MatchNode {
     start: number = 0;
     length: number = 0;
     files: Set<TFile> = new Set();
-    value: string = "";
+    value: string = '';
+    isAlias: boolean = false;
     caseIsMatched: boolean = true;
     requiresCaseMatch: boolean = false;
 
@@ -94,6 +95,10 @@ export class PrefixTree {
             matchNode.files = new Set(Array.from(node.node.files).filter((file) => !excludedNote || file.path !== excludedNote.path));
             matchNode.value = node.node.value;
             matchNode.requiresCaseMatch = node.node.requiresCaseMatch;
+
+            const fileNames = Array.from(matchNode.files).map((file) => file.basename);
+            const nodeValue = node.node.value;
+            matchNode.isAlias = !fileNames.includes(nodeValue);
 
             // Check if the case is matched
             let currentNode: PrefixNode | undefined = node.node;
@@ -148,7 +153,7 @@ export class PrefixTree {
     }
 
     private static isNoneEmptyString(value: string | null | undefined): value is string {
-        return value !== null && value !== undefined && typeof value === "string" && value.trim().length > 0;
+        return value !== null && value !== undefined && typeof value === 'string' && value.trim().length > 0;
     }
 
     private static isUpperCaseString(value: string | null | undefined, upperCasePart = 0.75) {
@@ -157,7 +162,7 @@ export class PrefixTree {
         }
 
         const length = value.length;
-        const upperCaseChars = value.split("").filter((char) => char === char.toUpperCase()).length;
+        const upperCaseChars = value.split('').filter((char) => char === char.toUpperCase()).length;
 
         return upperCaseChars / length >= upperCasePart;
     }
@@ -183,7 +188,7 @@ export class PrefixTree {
         // and normalize them by removing the # in front of tags
         const tags = (getAllTags(this.app.metadataCache.getFileCache(file)!!) ?? [])
             .filter(PrefixTree.isNoneEmptyString)
-            .map((tag) => (tag.startsWith("#") ? tag.slice(1) : tag));
+            .map((tag) => (tag.startsWith('#') ? tag.slice(1) : tag));
 
         const includeFile = metaInfo.includeFile;
         const excludeFile = metaInfo.excludeFile;
@@ -213,8 +218,8 @@ export class PrefixTree {
         const metadata = this.app.metadataCache.getFileCache(file);
         let aliases: string[] = metadata?.frontmatter?.aliases ?? [];
 
-        let aliasesWithMatchCase: Set<string> = new Set(metadata?.frontmatter?.["linker-match-case"] ?? []);
-        let aliasesWithIgnoreCase: Set<string> = new Set(metadata?.frontmatter?.["linker-ignore-case"] ?? []);
+        let aliasesWithMatchCase: Set<string> = new Set(metadata?.frontmatter?.['linker-match-case'] ?? []);
+        let aliasesWithIgnoreCase: Set<string> = new Set(metadata?.frontmatter?.['linker-ignore-case'] ?? []);
 
         // if (aliasesWithMatchCase.size > 0 || aliasesWithIgnoreCase.size > 0) {
         //     console.log("Aliases with match case", aliasesWithMatchCase, file.basename);
@@ -230,7 +235,7 @@ export class PrefixTree {
         try {
             aliases = aliases.filter(PrefixTree.isNoneEmptyString);
         } catch (e) {
-            console.error("[VL LC] Error filtering aliases", aliases, e);
+            console.error('[VL LC] Error filtering aliases', aliases, e);
         }
 
         let names = [file.basename];
@@ -284,7 +289,7 @@ export class PrefixTree {
     }
 
     private removeFileFromTree(file: TFile | string) {
-        const path = typeof file === "string" ? file : file.path;
+        const path = typeof file === 'string' ? file : file.path;
 
         // Get the leaf nodes of the file
         const nodes = this.mapFilePathToLeaveNodes.get(path) ?? [];
@@ -354,7 +359,7 @@ export class PrefixTree {
             try {
                 this.addFileToTree(file);
             } catch (e) {
-                console.error("[VL LC] Error adding file to tree", file, e);
+                console.error('[VL LC] Error adding file to tree', file, e);
             }
         }
 
