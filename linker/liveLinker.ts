@@ -1,20 +1,11 @@
-import { syntaxTree } from "@codemirror/language";
-import { RangeSetBuilder } from "@codemirror/state";
-import {
-    Decoration,
-    DecorationSet,
-    EditorView,
-    PluginSpec,
-    PluginValue,
-    ViewPlugin,
-    ViewUpdate,
-    WidgetType,
-} from "@codemirror/view";
-import { App, MarkdownView, TFile, Vault } from "obsidian";
+import { syntaxTree } from '@codemirror/language';
+import { RangeSetBuilder } from '@codemirror/state';
+import { Decoration, DecorationSet, EditorView, PluginSpec, PluginValue, ViewPlugin, ViewUpdate, WidgetType } from '@codemirror/view';
+import { App, MarkdownView, TFile, Vault } from 'obsidian';
 
-import IntervalTree from '@flatten-js/interval-tree'
-import { LinkerPluginSettings } from "main";
-import { ExternalUpdateManager, LinkerCache, PrefixTree } from "./linkerCache";
+import IntervalTree from '@flatten-js/interval-tree';
+import { LinkerPluginSettings } from 'main';
+import { ExternalUpdateManager, LinkerCache, PrefixTree } from './linkerCache';
 
 function isDescendant(parent: HTMLElement, child: HTMLElement, maxDepth: number = 10) {
     let node = child.parentNode;
@@ -30,15 +21,16 @@ function isDescendant(parent: HTMLElement, child: HTMLElement, maxDepth: number 
 }
 
 export class LiveLinkWidget extends WidgetType {
-
     constructor(
         public text: string,
         public linkFile: TFile,
         public from: number,
         public to: number,
         public isSubWord: boolean,
+        public isAlias: boolean,
         public app: App,
-        private settings: LinkerPluginSettings) {
+        private settings: LinkerPluginSettings
+    ) {
         super();
         // console.log(text, linkFile, app)
     }
@@ -50,11 +42,11 @@ export class LiveLinkWidget extends WidgetType {
         const note = this.linkFile;
         // const linkText = note.basename;
         const linkText = this.text;
-        let linkHref = "";
+        let linkHref = '';
         try {
             linkHref = note.path;
         } catch (e) {
-            console.error(e)
+            console.error(e);
         }
 
         const span = document.createElement('span');
@@ -62,29 +54,28 @@ export class LiveLinkWidget extends WidgetType {
 
         link.href = linkHref;
         link.textContent = linkText;
-        link.target = "_blank";
-        link.rel = "noopener noreferrer";
-        link.setAttribute("from", this.from.toString());
-        link.setAttribute("to", this.to.toString());
-        link.setAttribute("origin-text", this.text);
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.setAttribute('from', this.from.toString());
+        link.setAttribute('to', this.to.toString());
+        link.setAttribute('origin-text', this.text);
         link.classList.add('internal-link', 'virtual-link-a');
         span.classList.add('glossary-entry', 'virtual-link');
         if (this.settings.applyDefaultLinkStyling) {
-            span.classList.add("virtual-link-default");
+            span.classList.add('virtual-link-default');
         }
-
 
         span.appendChild(link);
 
-        if ((this.settings.glossarySuffix?.length ?? 0) > 0) {
-            if (!this.isSubWord || !this.settings.suppressSuffixForSubWords) {
-                let icon = document.createElement("sup");
-                icon.textContent = this.settings.glossarySuffix;
-                icon.classList.add("linker-suffix-icon");
+        if (!this.isSubWord || !this.settings.suppressSuffixForSubWords) {
+            const suffix = this.isAlias ? this.settings.virtualLinkAliasSuffix : this.settings.virtualLinkSuffix;
+            if ((suffix?.length ?? 0) > 0) {
+                let icon = document.createElement('sup');
+                icon.textContent = suffix;
+                icon.classList.add('linker-suffix-icon');
                 span.appendChild(icon);
             }
         }
-
 
         return span;
     }
@@ -95,7 +86,6 @@ export class LiveLinkWidget extends WidgetType {
     }
 }
 
-
 class AutoLinkerPlugin implements PluginValue {
     decorations: DecorationSet;
     app: App;
@@ -104,10 +94,8 @@ class AutoLinkerPlugin implements PluginValue {
 
     settings: LinkerPluginSettings;
 
-
-
     private lastCursorPos: number = 0;
-    private lastActiveFile: string = "";
+    private lastActiveFile: string = '';
     private lastViewUpdate: ViewUpdate | null = null;
 
     viewUpdateDomToFileMap: Map<HTMLElement, TFile | undefined | null> = new Map();
@@ -123,15 +111,12 @@ class AutoLinkerPlugin implements PluginValue {
 
         this.decorations = this.buildDecorations(view);
 
-
         updateManager.registerCallback(() => {
             if (this.lastViewUpdate) {
                 this.update(this.lastViewUpdate, true);
             }
         });
-
     }
-
 
     update(update: ViewUpdate, force: boolean = false) {
         const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
@@ -160,15 +145,13 @@ class AutoLinkerPlugin implements PluginValue {
             this.lastCursorPos = cursorPos;
             this.linkerCache.updateCache(force);
             this.decorations = this.buildDecorations(update.view, updateIsOnActiveView);
-            this.lastActiveFile = activeFile ?? "";
+            this.lastActiveFile = activeFile ?? '';
         }
 
         this.lastViewUpdate = update;
     }
 
-
-
-    destroy() { }
+    destroy() {}
 
     buildDecorations(view: EditorView, viewIsActive: boolean = true): DecorationSet {
         const builder = new RangeSetBuilder<Decoration>();
@@ -184,10 +167,8 @@ class AutoLinkerPlugin implements PluginValue {
         const excludedFolders = this.settings.excludedDirectoriesForLinking;
         if (excludedFolders.length > 0) {
             const path = mappedFile?.parent?.path ?? this.app.workspace.getActiveFile()?.parent?.path;
-            if (excludedFolders.includes(path ?? ""))
-                return builder.finish();
+            if (excludedFolders.includes(path ?? '')) return builder.finish();
         }
-
 
         // Set to exclude file that are explicitly linked
         const explicitlyLinkedFiles = new Set<TFile>();
@@ -196,29 +177,32 @@ class AutoLinkerPlugin implements PluginValue {
         const alreadyLinkedFiles = new Set<TFile>();
 
         for (let { from, to } of view.visibleRanges) {
-
             this.linkerCache.reset();
             const text = view.state.doc.sliceString(from, to);
 
             // For every glossary file and its aliases we now search the text for occurrences
-            const additions: { id: number, file: TFile, from: number, to: number, widget: WidgetType }[] = [];
+            const additions: { id: number; file: TFile; from: number; to: number; widget: WidgetType }[] = [];
 
             let id = 0;
             // Iterate over every char in the text
             for (let i = 0; i <= text.length; i) {
                 // Do this to get unicode characters as whole chars and not only half of them
                 const codePoint = text.codePointAt(i)!;
-                const char = i < text.length ? String.fromCodePoint(codePoint) : "\n";
+                const char = i < text.length ? String.fromCodePoint(codePoint) : '\n';
 
                 // If we are at a word boundary, get the current fitting files
-                const isWordBoundary = PrefixTree.checkWordBoundary(char);
-                if (!this.settings.matchOnlyWholeWords || isWordBoundary) {
-                    const currentNodes = this.linkerCache.cache.getCurrentMatchNodes(i, this.settings.excludeLinksToOwnNote ? mappedFile : null);
+                const isWordBoundary = PrefixTree.checkWordBoundary(char); // , this.settings.wordBoundaryRegex
+                if (!this.settings.matchOnlyWholeWords || this.settings.matchBeginningOfWords || isWordBoundary) {
+                    const currentNodes = this.linkerCache.cache.getCurrentMatchNodes(
+                        i,
+                        this.settings.excludeLinksToOwnNote ? mappedFile : null
+                    );
                     if (currentNodes.length > 0) {
                         for (const node of currentNodes) {
                             const nFrom = node.start;
                             const nTo = node.end;
                             const name = text.slice(nFrom, nTo);
+                            const isAlias = node.isAlias;
 
                             const aFrom = from + nFrom;
                             const aTo = from + nTo;
@@ -233,10 +217,9 @@ class AutoLinkerPlugin implements PluginValue {
                                     from: aFrom,
                                     to: aTo,
                                     file: file,
-                                    widget: new LiveLinkWidget(name, file, aFrom, aTo, !isWordBoundary, this.app, this.settings)
+                                    widget: new LiveLinkWidget(name, file, aFrom, aTo, !isWordBoundary, isAlias, this.app, this.settings),
                                 });
                             });
-
                         }
                     }
                 }
@@ -252,24 +235,16 @@ class AutoLinkerPlugin implements PluginValue {
                 if (a.from === b.from) {
                     return b.to - a.to;
                 }
-                return a.from - b.from
+                return a.from - b.from;
             });
 
             // We want to exclude some syntax nodes from being decorated,
             // such as code blocks and manually added links
             const excludedIntervalTree = new IntervalTree();
-            const excludedTypes = [
-                "codeblock",
-                "code-block",
-                "inline-code",
-                "internal-link",
-                "link",
-                "url",
-                "hashtag"
-            ]
+            const excludedTypes = ['codeblock', 'code-block', 'inline-code', 'internal-link', 'link', 'url', 'hashtag'];
 
             if (!this.settings.includeHeaders) {
-                excludedTypes.push("header-")
+                excludedTypes.push('header-');
             }
 
             // We also want to exclude links to files that are already linked by a real link
@@ -279,7 +254,7 @@ class AutoLinkerPlugin implements PluginValue {
                 to,
                 enter(node) {
                     const type = node.type.name;
-                    const types = type.split("_");
+                    const types = type.split('_');
                     // const text = view.state.doc.sliceString(node.from, node.to);
                     // console.log(text, node.type.name, types, node.from, node.to)
 
@@ -289,29 +264,23 @@ class AutoLinkerPlugin implements PluginValue {
 
                             // Types can be combined, e.g. internal-link_link-has-alias
                             // These combined types are separated by underscores
-                            const isLinkIfHavingTypes = [
-                                ["string", "url"],
-                                "hmd-internal-link",
-                                "internal-link",
-                            ]
+                            const isLinkIfHavingTypes = [['string', 'url'], 'hmd-internal-link', 'internal-link'];
 
-                            isLinkIfHavingTypes.forEach(t => {
+                            isLinkIfHavingTypes.forEach((t) => {
                                 const tList = Array.isArray(t) ? t : [t];
 
-                                if (tList.every(tt => types.includes(tt))) {
+                                if (tList.every((tt) => types.includes(tt))) {
                                     const text = view.state.doc.sliceString(node.from, node.to);
-                                    const linkedFile = app.metadataCache.getFirstLinkpathDest(text, mappedFile?.path ?? "")
+                                    const linkedFile = app.metadataCache.getFirstLinkpathDest(text, mappedFile?.path ?? '');
                                     if (linkedFile) {
                                         explicitlyLinkedFiles.add(linkedFile);
                                     }
                                 }
-                            })
+                            });
                         }
                     }
-
                 },
             });
-
 
             const filteredAdditions = [];
             const additionsToDelete: Map<number, boolean> = new Map();
@@ -393,9 +362,9 @@ class AutoLinkerPlugin implements PluginValue {
             const lineStart = view.state.doc.lineAt(cursorPos).from;
             const lineEnd = view.state.doc.lineAt(cursorPos).to;
 
-            filteredAdditions.forEach(addition => {
+            filteredAdditions.forEach((addition) => {
                 const [from, to] = [addition.from, addition.to];
-                const cursorNearby = (cursorPos >= from - 0 && cursorPos <= to + 0);
+                const cursorNearby = cursorPos >= from - 0 && cursorPos <= to + 0;
 
                 const additionIsInCurrentLine = from >= lineStart && to <= lineEnd;
 
@@ -413,7 +382,8 @@ class AutoLinkerPlugin implements PluginValue {
                         // - start with one or more greater-than signs followed by optional whitespace.
                         // - start with a hyphen followed by one or more spaces, then 1 to 6 hash symbols, and then one or more spaces.
                         // - start with a greater-than sign followed by a space, an exclamation mark within square brackets containing word characters or hyphens, an optional plus or minus sign, and one or more spaces.
-                        const regAddInLineStart = /(^\s*$)|(^\s*- +$)|(^\s*#{1,6} $)|(^\s*>+ *$)|(^\s*- +#{1,6} +$)|(^\s*> \[![\w-]+\][+-]? +$)/;
+                        const regAddInLineStart =
+                            /(^\s*$)|(^\s*- +$)|(^\s*#{1,6} $)|(^\s*>+ *$)|(^\s*- +#{1,6} +$)|(^\s*> \[![\w-]+\][+-]? +$)/;
 
                         // check add is at line start
                         if (!regAddInLineStart.test(strBeforeAdd)) {
@@ -426,16 +396,19 @@ class AutoLinkerPlugin implements PluginValue {
                                 needImeFix = false;
                             }
                         }
-                    }
-                    else {
+                    } else {
                         needImeFix = false;
                     }
                 }
 
                 if (!cursorNearby && !needImeFix && !(excludeLine && additionIsInCurrentLine)) {
-                    builder.add(from, to, Decoration.replace({
-                        widget: addition.widget
-                    }));
+                    builder.add(
+                        from,
+                        to,
+                        Decoration.replace({
+                            widget: addition.widget,
+                        })
+                    );
                 }
             });
         }
@@ -444,14 +417,12 @@ class AutoLinkerPlugin implements PluginValue {
     }
 }
 
-
 const pluginSpec: PluginSpec<AutoLinkerPlugin> = {
     decorations: (value: AutoLinkerPlugin) => value.decorations,
 };
 
 export const liveLinkerPlugin = (app: App, settings: LinkerPluginSettings, updateManager: ExternalUpdateManager) => {
     return ViewPlugin.define((editorView: EditorView) => {
-        return (new AutoLinkerPlugin(editorView, app, settings, updateManager));
-    }, pluginSpec)
-}
-
+        return new AutoLinkerPlugin(editorView, app, settings, updateManager);
+    }, pluginSpec);
+};
