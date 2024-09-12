@@ -56,9 +56,17 @@ You can also exclude all files in a specific folder by adding the folder to the 
 
 ### Case sensitivity
 You can toggle the case sensitivity of the matching. By default, the matching is case insensitive.
+
+Often there are words with mainly capitalized letters, that should be matched case sensitive. By default, words with 75% or more capitalized letters are matched case sensitive. You can change this threshold in the settings.
+
 You can also explicitly change the case sensitivity of a specific file by adding a tag to the file. You can change the tag in the settings, by default it is:
 - `linker-match-case` to make the matching case sensitive
 - `linker-ignore-case` to make the matching case insensitive
+
+If you want to define the case sensitivity for specific aliases, you can define the frontmatter property lists in a note:
+- `linker-match-case` with a list of names that should be matched only case sensitive
+- `linker-ignore-case` with a list of names that should be matched case insensitive 
+These property names can be changed in the settings.
 
 ### Matching mode
 

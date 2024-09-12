@@ -25,8 +25,11 @@ export interface LinkerPluginSettings {
     applyDefaultLinkStyling: boolean;
     includeHeaders: boolean;
     matchCaseSensitive: boolean;
+	capitalLetterProportionForAutomaticMatchCase: number;
     tagToIgnoreCase: string;
     tagToMatchCase: string;
+    propertyNameToMatchCase: string;
+    propertyNameToIgnoreCase: string;
     tagToExcludeFile: string;
     tagToIncludeFile: string;
     excludeLinksToOwnNote: boolean;
@@ -56,8 +59,11 @@ const DEFAULT_SETTINGS: LinkerPluginSettings = {
     applyDefaultLinkStyling: true,
     includeHeaders: true,
     matchCaseSensitive: false,
+	capitalLetterProportionForAutomaticMatchCase: 0.75,
     tagToIgnoreCase: 'linker-ignore-case',
     tagToMatchCase: 'linker-match-case',
+    propertyNameToMatchCase: 'linker-match-case',
+    propertyNameToIgnoreCase: 'linker-ignore-case',
     tagToExcludeFile: 'linker-exclude',
     tagToIncludeFile: 'linker-include',
     excludeLinksToOwnNote: true,
@@ -203,16 +209,15 @@ export default class LinkerPlugin extends Plugin {
                                     path.relative(path.dirname(activeFile.path), path.dirname(absolutePath)) +
                                     '/' +
                                     path.basename(absolutePath);
-								relativePath = relativePath.replace(/\\/g, '/'); // Replace backslashes with forward slashes
+                                relativePath = relativePath.replace(/\\/g, '/'); // Replace backslashes with forward slashes
 
-
-								// Problem: we cannot just take the fileToLinktext result, as it depends on the app settings
+                                // Problem: we cannot just take the fileToLinktext result, as it depends on the app settings
                                 const replacementPath = app.metadataCache.fileToLinktext(target as TFile, activeFilePath);
 
-								// The last part of the replacement path is the real shortest file name
-								// We have to check, if it leads to the correct file
-								const lastPart = replacementPath.split('/').pop()!;
-								const shortestFile = app.metadataCache.getFirstLinkpathDest(lastPart!, "");
+                                // The last part of the replacement path is the real shortest file name
+                                // We have to check, if it leads to the correct file
+                                const lastPart = replacementPath.split('/').pop()!;
+                                const shortestFile = app.metadataCache.getFirstLinkpathDest(lastPart!, '');
                                 // let shortestPath = shortestFile?.path == target.path ? lastPart : replacementPath;
                                 let shortestPath = shortestFile?.path == target.path ? lastPart : absolutePath;
 
@@ -229,7 +234,7 @@ export default class LinkerPlugin extends Plugin {
                                     }
                                 }
 
-								const useMarkdownLinks = settings.useDefaultLinkStyleForConversion
+                                const useMarkdownLinks = settings.useDefaultLinkStyleForConversion
                                     ? settings.defaultUseMarkdownLinks
                                     : settings.useMarkdownLinks;
 
@@ -526,42 +531,6 @@ class LinkerSettingTab extends PluginSettingTab {
                 })
             );
 
-        // Toggle setting for case sensitivity
-        new Setting(containerEl)
-            .setName('Case sensitive')
-            .setDesc('If activated, the matching is case sensitive.')
-            .addToggle((toggle) =>
-                toggle.setValue(this.plugin.settings.matchCaseSensitive).onChange(async (value) => {
-                    // console.log("Case sensitive: " + value);
-                    await this.plugin.updateSettings({ matchCaseSensitive: value });
-                    this.display();
-                })
-            );
-
-        if (this.plugin.settings.matchCaseSensitive) {
-            // Text setting for tag to ignore case
-            new Setting(containerEl)
-                .setName('Tag to ignore case')
-                .setDesc('By adding this tag to a file, the linker will ignore the case for the file.')
-                .addText((text) =>
-                    text.setValue(this.plugin.settings.tagToIgnoreCase).onChange(async (value) => {
-                        // console.log("New tag to ignore case: " + value);
-                        await this.plugin.updateSettings({ tagToIgnoreCase: value });
-                    })
-                );
-        } else {
-            // Text setting for tag to match case
-            new Setting(containerEl)
-                .setName('Tag to match case')
-                .setDesc('By adding this tag to a file, the linker will match the case for the file.')
-                .addText((text) =>
-                    text.setValue(this.plugin.settings.tagToMatchCase).onChange(async (value) => {
-                        // console.log("New tag to match case: " + value);
-                        await this.plugin.updateSettings({ tagToMatchCase: value });
-                    })
-                );
-        }
-
         // If headers should be matched or not
         new Setting(containerEl)
             .setName('Include headers')
@@ -620,6 +589,94 @@ class LinkerSettingTab extends PluginSettingTab {
                     await this.plugin.updateSettings({ excludeLinksInCurrentLine: value });
                 })
             );
+
+		new Setting(containerEl).setName('Case sensitivity').setHeading();
+		
+
+        // Toggle setting for case sensitivity
+        new Setting(containerEl)
+            .setName('Case sensitive')
+            .setDesc('If activated, the matching is case sensitive.')
+            .addToggle((toggle) =>
+                toggle.setValue(this.plugin.settings.matchCaseSensitive).onChange(async (value) => {
+                    // console.log("Case sensitive: " + value);
+                    await this.plugin.updateSettings({ matchCaseSensitive: value });
+                    this.display();
+                })
+            );
+
+		// Number input setting for capital letter proportion for automatic match case
+		new Setting(containerEl)
+			.setName('Capital letter percentage for automatic match case')
+			.setDesc('The percentage (0 - 100) of capital letters in a file name or alias to be automatically considered as case sensitive.')
+			.addText((text) =>
+				text.setValue((this.plugin.settings.capitalLetterProportionForAutomaticMatchCase * 100).toFixed(1))
+					.onChange(async (value) => {
+						let newValue = parseFloat(value);
+						if (isNaN(newValue)) {
+							newValue = 75;
+						} else if (newValue < 0) {
+							newValue = 0;
+						}
+						else if (newValue > 100) {
+							newValue = 100;
+						}
+						newValue /= 100;
+
+						// console.log("New capital letter proportion for automatic match case: " + newValue);
+						await this.plugin.updateSettings({ capitalLetterProportionForAutomaticMatchCase: newValue });
+					})
+			);
+						
+
+        if (this.plugin.settings.matchCaseSensitive) {
+            // Text setting for tag to ignore case
+            new Setting(containerEl)
+                .setName('Tag to ignore case')
+                .setDesc('By adding this tag to a file, the linker will ignore the case for the file.')
+                .addText((text) =>
+                    text.setValue(this.plugin.settings.tagToIgnoreCase).onChange(async (value) => {
+                        // console.log("New tag to ignore case: " + value);
+                        await this.plugin.updateSettings({ tagToIgnoreCase: value });
+                    })
+                );
+        } else {
+            // Text setting for tag to match case
+            new Setting(containerEl)
+                .setName('Tag to match case')
+                .setDesc('By adding this tag to a file, the linker will match the case for the file.')
+                .addText((text) =>
+                    text.setValue(this.plugin.settings.tagToMatchCase).onChange(async (value) => {
+                        // console.log("New tag to match case: " + value);
+                        await this.plugin.updateSettings({ tagToMatchCase: value });
+                    })
+                );
+        }
+
+		// Text setting for property name to ignore case
+		new Setting(containerEl)
+			.setName('Property name to ignore case')
+			.setDesc('By adding this property to a note, containing a list of names, the linker will ignore the case for the specified names / aliases. This way you can decide, which alias should be insensitive.')
+			.addText((text) =>
+				text.setValue(this.plugin.settings.propertyNameToIgnoreCase).onChange(async (value) => {
+					// console.log("New property name to ignore case: " + value);
+					await this.plugin.updateSettings({ propertyNameToIgnoreCase: value });
+				})
+			);
+
+			
+		// Text setting for property name to match case
+		new Setting(containerEl)
+			.setName('Property name to match case')
+			.setDesc('By adding this property to a note, containing a list of names, the linker will match the case for the specified names / aliases. This way you can decide, which alias should be case sensitive.')
+			.addText((text) =>
+				text.setValue(this.plugin.settings.propertyNameToMatchCase).onChange(async (value) => {
+					// console.log("New property name to match case: " + value);
+					await this.plugin.updateSettings({ propertyNameToMatchCase: value });
+				})
+			);
+
+
 
         new Setting(containerEl).setName('Matched files').setHeading();
 

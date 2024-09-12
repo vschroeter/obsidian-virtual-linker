@@ -217,9 +217,9 @@ export class PrefixTree {
 
         const metadata = this.app.metadataCache.getFileCache(file);
         let aliases: string[] = metadata?.frontmatter?.aliases ?? [];
-
-        let aliasesWithMatchCase: Set<string> = new Set(metadata?.frontmatter?.['linker-match-case'] ?? []);
-        let aliasesWithIgnoreCase: Set<string> = new Set(metadata?.frontmatter?.['linker-ignore-case'] ?? []);
+        
+        let aliasesWithMatchCase: Set<string> = new Set(metadata?.frontmatter?.[this.settings.propertyNameToMatchCase] ?? []);
+        let aliasesWithIgnoreCase: Set<string> = new Set(metadata?.frontmatter?.[this.settings.propertyNameToIgnoreCase] ?? []);
 
         // if (aliasesWithMatchCase.size > 0 || aliasesWithIgnoreCase.size > 0) {
         //     console.log("Aliases with match case", aliasesWithMatchCase, file.basename);
@@ -264,7 +264,8 @@ export class PrefixTree {
                 namesWithCaseMatch = [...names];
                 lowerCaseNames = names.filter((name) => aliasesWithIgnoreCase.has(name));
             } else {
-                namesWithCaseMatch = [...names].filter((name) => PrefixTree.isUpperCaseString(name) && !aliasesWithIgnoreCase.has(name));
+                const prop = this.settings.capitalLetterProportionForAutomaticMatchCase;
+                namesWithCaseMatch = [...names].filter((name) => PrefixTree.isUpperCaseString(name, prop) && !aliasesWithIgnoreCase.has(name));
                 namesWithCaseIgnore = [...names].filter((name) => !namesWithCaseMatch.includes(name));
             }
         }
