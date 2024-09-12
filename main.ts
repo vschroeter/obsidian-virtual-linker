@@ -5,6 +5,8 @@ import { liveLinkerPlugin } from './linker/liveLinker';
 import { ExternalUpdateManager, LinkerCache } from 'linker/linkerCache';
 import { LinkerMetaInfoFetcher } from 'linker/linkerInfo';
 
+import * as path from 'path';
+
 export interface LinkerPluginSettings {
     linkerActivated: boolean;
     suppressSuffixForSubWords: boolean;
@@ -15,7 +17,11 @@ export interface LinkerPluginSettings {
     excludedDirectoriesForLinking: string[];
     virtualLinkSuffix: string;
     virtualLinkAliasSuffix: string;
+    useDefaultLinkStyleForConversion: boolean;
+    defaultUseMarkdownLinks: boolean; // Otherwise wiki links
+    defaultLinkFormat: 'shortest' | 'relative' | 'absolute';
     useMarkdownLinks: boolean;
+    linkFormat: 'shortest' | 'relative' | 'absolute';
     applyDefaultLinkStyling: boolean;
     includeHeaders: boolean;
     matchCaseSensitive: boolean;
@@ -29,6 +35,7 @@ export interface LinkerPluginSettings {
     onlyLinkOnce: boolean;
     excludeLinksToRealLinkedFiles: boolean;
     includeAliases: boolean;
+    // conversionFormat
 }
 
 const DEFAULT_SETTINGS: LinkerPluginSettings = {
@@ -42,6 +49,10 @@ const DEFAULT_SETTINGS: LinkerPluginSettings = {
     virtualLinkSuffix: '🔗',
     virtualLinkAliasSuffix: '🔗',
     useMarkdownLinks: false,
+    linkFormat: 'shortest',
+    defaultUseMarkdownLinks: false,
+    defaultLinkFormat: 'shortest',
+    useDefaultLinkStyleForConversion: true,
     applyDefaultLinkStyling: true,
     includeHeaders: true,
     matchCaseSensitive: false,
@@ -187,21 +198,68 @@ export default class LinkerPlugin extends Plugin {
                                     return;
                                 }
 
+                                let absolutePath = target.path;
+                                let relativePath =
+                                    path.relative(path.dirname(activeFile.path), path.dirname(absolutePath)) +
+                                    '/' +
+                                    path.basename(absolutePath);
+								relativePath = relativePath.replace(/\\/g, '/'); // Replace backslashes with forward slashes
+
+
+								// Problem: we cannot just take the fileToLinktext result, as it depends on the app settings
                                 const replacementPath = app.metadataCache.fileToLinktext(target as TFile, activeFilePath);
+
+								// The last part of the replacement path is the real shortest file name
+								// We have to check, if it leads to the correct file
+								const lastPart = replacementPath.split('/').pop()!;
+								const shortestFile = app.metadataCache.getFirstLinkpathDest(lastPart!, "");
+                                // let shortestPath = shortestFile?.path == target.path ? lastPart : replacementPath;
+                                let shortestPath = shortestFile?.path == target.path ? lastPart : absolutePath;
+
+                                // Remove superfluous .md extension
+                                if (!replacementPath.endsWith('.md')) {
+                                    if (absolutePath.endsWith('.md')) {
+                                        absolutePath = absolutePath.slice(0, -3);
+                                    }
+                                    if (shortestPath.endsWith('.md')) {
+                                        shortestPath = shortestPath.slice(0, -3);
+                                    }
+                                    if (relativePath.endsWith('.md')) {
+                                        relativePath = relativePath.slice(0, -3);
+                                    }
+                                }
+
+								const useMarkdownLinks = settings.useDefaultLinkStyleForConversion
+                                    ? settings.defaultUseMarkdownLinks
+                                    : settings.useMarkdownLinks;
+
+                                const linkFormat = settings.useDefaultLinkStyleForConversion
+                                    ? settings.defaultLinkFormat
+                                    : settings.linkFormat;
+
+                                const createLink = (replacementPath: string, text: string, markdownStyle: boolean) => {
+                                    if (markdownStyle) {
+                                        return `[${text}](${replacementPath})`;
+                                    } else {
+                                        return `[[${replacementPath}|${text}]]`;
+                                    }
+                                };
 
                                 // Create the replacement
                                 let replacement = '';
 
                                 // If the file is the same as the shown text, and we can use short links, we use them
-                                if (replacementPath === text) {
+                                if (replacementPath === text && linkFormat === 'shortest') {
                                     replacement = `[[${replacementPath}]]`;
                                 }
                                 // Otherwise create a specific link, using the shown text
                                 else {
-                                    if (settings.useMarkdownLinks) {
-                                        replacement = `[${text}](${replacementPath})`;
-                                    } else {
-                                        replacement = `[[${replacementPath}|${text}]]`;
+                                    if (linkFormat === 'shortest') {
+                                        replacement = createLink(shortestPath, text, useMarkdownLinks);
+                                    } else if (linkFormat === 'relative') {
+                                        replacement = createLink(relativePath, text, useMarkdownLinks);
+                                    } else if (linkFormat === 'absolute') {
+                                        replacement = createLink(absolutePath, text, useMarkdownLinks);
                                     }
                                 }
 
@@ -403,7 +461,8 @@ export default class LinkerPlugin extends Plugin {
         // We also Cannot use the vault API because it only reads the vault files not the .obsidian folder
         const fileContent = await this.app.vault.adapter.read(this.app.vault.configDir + '/app.json');
         const appSettings = JSON.parse(fileContent);
-        this.settings.useMarkdownLinks = appSettings.useMarkdownLinks;
+        this.settings.defaultUseMarkdownLinks = appSettings.useMarkdownLinks;
+        this.settings.defaultLinkFormat = appSettings.newLinkFormat ?? 'shortest';
     }
 
     /** Update plugin settings. */
@@ -727,5 +786,46 @@ class LinkerSettingTab extends PluginSettingTab {
                     await this.plugin.updateSettings({ applyDefaultLinkStyling: value });
                 })
             );
+
+        // Toggle setting to use default link style for conversion
+        new Setting(containerEl)
+            .setName('Use default link style for conversion')
+            .setDesc('If toggled, the default link style will be used for the conversion of virtual links to real links.')
+            .addToggle((toggle) =>
+                toggle.setValue(this.plugin.settings.useDefaultLinkStyleForConversion).onChange(async (value) => {
+                    // console.log("Use default link style for conversion: " + value);
+                    await this.plugin.updateSettings({ useDefaultLinkStyleForConversion: value });
+                    this.display();
+                })
+            );
+
+        if (!this.plugin.settings.useDefaultLinkStyleForConversion) {
+            // Toggle setting to use markdown links
+            new Setting(containerEl)
+                .setName('Use [[Wiki-links]]')
+                .setDesc('If toggled, the virtual links will be created as wiki-links instead of markdown links.')
+                .addToggle((toggle) =>
+                    toggle.setValue(!this.plugin.settings.useMarkdownLinks).onChange(async (value) => {
+                        // console.log("Use markdown links: " + value);
+                        await this.plugin.updateSettings({ useMarkdownLinks: !value });
+                    })
+                );
+
+            // Dropdown setting for link format
+            new Setting(containerEl)
+                .setName('Link format')
+                .setDesc('The format of the generated links.')
+                .addDropdown((dropdown) =>
+                    dropdown
+                        .addOption('shortest', 'Shortest')
+                        .addOption('relative', 'Relative')
+                        .addOption('absolute', 'Absolute')
+                        .setValue(this.plugin.settings.linkFormat)
+                        .onChange(async (value) => {
+                            // console.log("New link format: " + value);
+                            await this.plugin.updateSettings({ linkFormat: value as 'shortest' | 'relative' | 'absolute' });
+                        })
+                );
+        }
     }
 }
