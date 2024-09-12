@@ -81,10 +81,18 @@ export class GlossaryLinker extends MarkdownRenderChild {
                         if (text.length === 0) continue;
 
                         this.linkerCache.reset();
-
-                        const additions: { id: number; from: number; to: number; text: string; file: TFile; isSubWord: boolean, isAlias: boolean }[] = [];
+                        const additions: {
+                            id: number;
+                            from: number;
+                            to: number;
+                            text: string;
+                            file: TFile;
+                            isSubWord: boolean;
+                            isAlias: boolean;
+                        }[] = [];
 
                         let id = 0;
+
                         // Iterate over every char in the text
                         for (let i = 0; i <= text.length; i) {
                             // Do this to get unicode characters as whole chars and not only half of them
@@ -92,8 +100,8 @@ export class GlossaryLinker extends MarkdownRenderChild {
                             const char = i < text.length ? String.fromCodePoint(codePoint) : '\n';
 
                             // If we are at a word boundary, get the current fitting files
-                            const isWordBoundary = PrefixTree.checkWordBoundary(char);
-                            if (!this.settings.matchOnlyWholeWords || isWordBoundary) {
+                            const isWordBoundary = PrefixTree.checkWordBoundary(char); // , this.settings.wordBoundaryRegex
+                            if (!this.settings.matchOnlyWholeWords || this.settings.matchBeginningOfWords || isWordBoundary) {
                                 const currentNodes = this.linkerCache.cache.getCurrentMatchNodes(i);
                                 if (currentNodes.length > 0) {
                                     // TODO: Handle multiple matches
@@ -112,7 +120,7 @@ export class GlossaryLinker extends MarkdownRenderChild {
                                         text: name,
                                         file: file,
                                         isSubWord: !isWordBoundary,
-										isAlias: node.isAlias,
+                                        isAlias: node.isAlias,
                                     });
                                 }
                             }
@@ -231,15 +239,15 @@ export class GlossaryLinker extends MarkdownRenderChild {
 
                             span.appendChild(link);
 
-							if (!addition.isSubWord || !this.settings.suppressSuffixForSubWords) {
-								const suffix = addition.isAlias ? this.settings.virtualLinkAliasSuffix : this.settings.virtualLinkSuffix;
-								if ((suffix?.length ?? 0) > 0) {
-									let icon = document.createElement('sup');
-									icon.textContent = suffix;
-									icon.classList.add('linker-suffix-icon');
-									span.appendChild(icon);
-								}
-							}
+                            if (!addition.isSubWord || !this.settings.suppressSuffixForSubWords) {
+                                const suffix = addition.isAlias ? this.settings.virtualLinkAliasSuffix : this.settings.virtualLinkSuffix;
+                                if ((suffix?.length ?? 0) > 0) {
+                                    let icon = document.createElement('sup');
+                                    icon.textContent = suffix;
+                                    icon.classList.add('linker-suffix-icon');
+                                    span.appendChild(icon);
+                                }
+                            }
 
                             if (addition.from > 0) {
                                 parent?.insertBefore(document.createTextNode(text.slice(lastTo, addition.from)), childNode);

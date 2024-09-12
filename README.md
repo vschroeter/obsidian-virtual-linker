@@ -76,10 +76,11 @@ Furthermore, you can toggle to suppress the creation of virtual links to files, 
 
 #### Part matching
 You can toggle the matching mode between:
-- "Matching only whole words": Only whole words are matched. E.g. "Note" will not match "Notebook".
-- "Matching any part of a word": Any part of a word is matched. E.g. "Note" will match "Notebook".
+- "Matching only whole words": Only whole words are matched. E.g. "book" will not match "Notebook".
+- "Match also beginning of words": The beginning of a word is matched. E.g. "book" will not match "Notebook", but "Note" will match "Notebook".
+- "Matching any part of a word": Any part of a word is matched. E.g. "book" will match "Notebook".
 
-If you choose "Matching any part of a word", you furthermore have the option to suppress the link suffix for these matches to avoid cluttering your text.
+You furthermore have the option to suppress the link suffix for these matches to avoid cluttering your text.
 
 #### Links to the note itself
 By default, links to a note itself are suppressed.

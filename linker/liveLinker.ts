@@ -191,8 +191,8 @@ class AutoLinkerPlugin implements PluginValue {
                 const char = i < text.length ? String.fromCodePoint(codePoint) : '\n';
 
                 // If we are at a word boundary, get the current fitting files
-                const isWordBoundary = PrefixTree.checkWordBoundary(char);
-                if (!this.settings.matchOnlyWholeWords || isWordBoundary) {
+                const isWordBoundary = PrefixTree.checkWordBoundary(char); // , this.settings.wordBoundaryRegex
+                if (!this.settings.matchOnlyWholeWords || this.settings.matchBeginningOfWords || isWordBoundary) {
                     const currentNodes = this.linkerCache.cache.getCurrentMatchNodes(
                         i,
                         this.settings.excludeLinksToOwnNote ? mappedFile : null

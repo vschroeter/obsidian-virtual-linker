@@ -217,7 +217,7 @@ export class PrefixTree {
 
         const metadata = this.app.metadataCache.getFileCache(file);
         let aliases: string[] = metadata?.frontmatter?.aliases ?? [];
-        
+
         let aliasesWithMatchCase: Set<string> = new Set(metadata?.frontmatter?.[this.settings.propertyNameToMatchCase] ?? []);
         let aliasesWithIgnoreCase: Set<string> = new Set(metadata?.frontmatter?.[this.settings.propertyNameToIgnoreCase] ?? []);
 
@@ -265,7 +265,9 @@ export class PrefixTree {
                 lowerCaseNames = names.filter((name) => aliasesWithIgnoreCase.has(name));
             } else {
                 const prop = this.settings.capitalLetterProportionForAutomaticMatchCase;
-                namesWithCaseMatch = [...names].filter((name) => PrefixTree.isUpperCaseString(name, prop) && !aliasesWithIgnoreCase.has(name));
+                namesWithCaseMatch = [...names].filter(
+                    (name) => PrefixTree.isUpperCaseString(name, prop) && !aliasesWithIgnoreCase.has(name)
+                );
                 namesWithCaseIgnore = [...names].filter((name) => !namesWithCaseMatch.includes(name));
             }
         }
@@ -391,9 +393,10 @@ export class PrefixTree {
         const chars = [char];
         chars.push(char.toLowerCase());
 
+
         chars.forEach((c) => {
             // char = char.toLowerCase();
-            if (!this.settings.matchOnlyWholeWords || PrefixTree.checkWordBoundary(c)) {
+            if (!this.settings.matchOnlyWholeWords || PrefixTree.checkWordBoundary(c)) { // , this.settings.wordBoundaryRegex
                 newNodes.push(new VisitedPrefixNode(this.root));
             }
 
@@ -410,8 +413,28 @@ export class PrefixTree {
         this._currentNodes = newNodes;
     }
 
-    static checkWordBoundary(char: string): boolean {
-        const pattern = /[\/\n\t\r\s,.!"`´()\[\]'{}|~\p{Emoji_Presentation}\p{Extended_Pictographic}]/u;
+    static checkWordBoundary(char: string): boolean { // , regexString: string
+        // const pattern = /[\/\n\t\r\s,.!?:"`´()\[\]'{}|~\p{Emoji_Presentation}\p{Extended_Pictographic}]/u;
+
+        let pattern = /[\t- !-/:-@\[-`{-~\p{Emoji_Presentation}\p{Extended_Pictographic}]/u;
+        // if (regexString) {
+        //     if (typeof regexString !== 'string') {
+        //         regexString = regexString.toString();
+
+        //     }
+        //     if (!regexString.startsWith('/')) {
+        //         regexString = '/' + regexString;
+        //     }
+        //     if (!regexString.endsWith('/')) {
+        //         regexString = regexString + '/';
+        //     }
+        //     const parts = regexString.match(/\/(.*)\/([a-z]*)\/?/);
+        //     if (!parts) {
+        //         throw new Error('Invalid regex: ' + regexString);
+        //     }
+        //     pattern = new RegExp(parts[1], parts[2]);
+        // }
+        // console.log('Checking word boundary', char, pattern);
         return pattern.test(char);
     }
 }

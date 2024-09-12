@@ -8,9 +8,11 @@ import { LinkerMetaInfoFetcher } from 'linker/linkerInfo';
 import * as path from 'path';
 
 export interface LinkerPluginSettings {
+    advancedSettings: boolean;
     linkerActivated: boolean;
     suppressSuffixForSubWords: boolean;
     matchOnlyWholeWords: boolean;
+    matchBeginningOfWords: boolean;
     includeAllFiles: boolean;
     linkerDirectories: string[];
     excludedDirectories: string[];
@@ -25,7 +27,7 @@ export interface LinkerPluginSettings {
     applyDefaultLinkStyling: boolean;
     includeHeaders: boolean;
     matchCaseSensitive: boolean;
-	capitalLetterProportionForAutomaticMatchCase: number;
+    capitalLetterProportionForAutomaticMatchCase: number;
     tagToIgnoreCase: string;
     tagToMatchCase: string;
     propertyNameToMatchCase: string;
@@ -38,12 +40,15 @@ export interface LinkerPluginSettings {
     onlyLinkOnce: boolean;
     excludeLinksToRealLinkedFiles: boolean;
     includeAliases: boolean;
+    // wordBoundaryRegex: string;
     // conversionFormat
 }
 
 const DEFAULT_SETTINGS: LinkerPluginSettings = {
+    advancedSettings: false,
     linkerActivated: true,
-    matchOnlyWholeWords: false,
+    matchOnlyWholeWords: true,
+    matchBeginningOfWords: true,
     suppressSuffixForSubWords: false,
     includeAllFiles: true,
     linkerDirectories: ['Glossary'],
@@ -59,7 +64,7 @@ const DEFAULT_SETTINGS: LinkerPluginSettings = {
     applyDefaultLinkStyling: true,
     includeHeaders: true,
     matchCaseSensitive: false,
-	capitalLetterProportionForAutomaticMatchCase: 0.75,
+    capitalLetterProportionForAutomaticMatchCase: 0.75,
     tagToIgnoreCase: 'linker-ignore-case',
     tagToMatchCase: 'linker-match-case',
     propertyNameToMatchCase: 'linker-match-case',
@@ -72,6 +77,7 @@ const DEFAULT_SETTINGS: LinkerPluginSettings = {
     onlyLinkOnce: true,
     excludeLinksToRealLinkedFiles: true,
     includeAliases: true,
+    // wordBoundaryRegex: '/[\t- !-/:-@\[-`{-~\p{Emoji_Presentation}\p{Extended_Pictographic}]/u',
 };
 
 export default class LinkerPlugin extends Plugin {
@@ -496,6 +502,15 @@ class LinkerSettingTab extends PluginSettingTab {
             })
         );
 
+        // Toggle to show advanced settings
+        new Setting(containerEl).setName('Show advanced settings').addToggle((toggle) =>
+            toggle.setValue(this.plugin.settings.advancedSettings).onChange(async (value) => {
+                // console.log("Advanced settings: " + value);
+                await this.plugin.updateSettings({ advancedSettings: value });
+                this.display();
+            })
+        );
+
         new Setting(containerEl).setName('Matching behavior').setHeading();
 
         // Toggle to include aliases
@@ -509,27 +524,29 @@ class LinkerSettingTab extends PluginSettingTab {
                 })
             );
 
-        // Toggle to only link once
-        new Setting(containerEl)
-            .setName('Only link once')
-            .setDesc('If activated, there will not be several identical virtual links in the same note (Wikipedia style).')
-            .addToggle((toggle) =>
-                toggle.setValue(this.plugin.settings.onlyLinkOnce).onChange(async (value) => {
-                    // console.log("Only link once: " + value);
-                    await this.plugin.updateSettings({ onlyLinkOnce: value });
-                })
-            );
+        if (this.plugin.settings.advancedSettings) {
+            // Toggle to only link once
+            new Setting(containerEl)
+                .setName('Only link once')
+                .setDesc('If activated, there will not be several identical virtual links in the same note (Wikipedia style).')
+                .addToggle((toggle) =>
+                    toggle.setValue(this.plugin.settings.onlyLinkOnce).onChange(async (value) => {
+                        // console.log("Only link once: " + value);
+                        await this.plugin.updateSettings({ onlyLinkOnce: value });
+                    })
+                );
 
-        // Toggle to exclude links to real linked files
-        new Setting(containerEl)
-            .setName('Exclude links to real linked files')
-            .setDesc('If activated, there will be no links to files that are already linked in the note by real links.')
-            .addToggle((toggle) =>
-                toggle.setValue(this.plugin.settings.excludeLinksToRealLinkedFiles).onChange(async (value) => {
-                    // console.log("Exclude links to real linked files: " + value);
-                    await this.plugin.updateSettings({ excludeLinksToRealLinkedFiles: value });
-                })
-            );
+            // Toggle to exclude links to real linked files
+            new Setting(containerEl)
+                .setName('Exclude links to real linked files')
+                .setDesc('If activated, there will be no links to files that are already linked in the note by real links.')
+                .addToggle((toggle) =>
+                    toggle.setValue(this.plugin.settings.excludeLinksToRealLinkedFiles).onChange(async (value) => {
+                        // console.log("Exclude links to real linked files: " + value);
+                        await this.plugin.updateSettings({ excludeLinksToRealLinkedFiles: value });
+                    })
+                );
+        }
 
         // If headers should be matched or not
         new Setting(containerEl)
@@ -553,8 +570,23 @@ class LinkerSettingTab extends PluginSettingTab {
                     this.display();
                 })
             );
+
+        if (this.plugin.settings.matchOnlyWholeWords) {
+            // Toggle setting to match only beginning of words
+            new Setting(containerEl)
+                .setName('Match also beginning of words')
+                .setDesc('If activated, the beginnings of words are also linked, even if it is not a whole match.')
+                .addToggle((toggle) =>
+                    toggle.setValue(this.plugin.settings.matchBeginningOfWords).onChange(async (value) => {
+                        // console.log("Match only beginning of words: " + value);
+                        await this.plugin.updateSettings({ matchBeginningOfWords: value });
+                        this.display();
+                    })
+                );
+        }
+
         // Toggle setting to suppress suffix for sub words
-        if (!this.plugin.settings.matchOnlyWholeWords) {
+        if (!this.plugin.settings.matchOnlyWholeWords || this.plugin.settings.matchBeginningOfWords) {
             new Setting(containerEl)
                 .setName('Suppress suffix for sub words')
                 .setDesc('If activated, the suffix is not added to links for subwords, but only for complete matches.')
@@ -566,32 +598,51 @@ class LinkerSettingTab extends PluginSettingTab {
                 );
         }
 
-        // Toggle setting to exclude links in the current line start for fixing IME
-        new Setting(containerEl)
-            .setName('Fix IME problem')
-            .setDesc(
-                'If activated, there will be no links in the current line start which is followed immediately by the Input Method Editor (IME). This is the recommended setting if you are using IME (input method editor) for typing, e.g. for chinese characters, because instant linking might interfere with IME.'
-            )
-            .addToggle((toggle) =>
-                toggle.setValue(this.plugin.settings.fixIMEProblem).onChange(async (value) => {
-                    // console.log("Exclude links in current line: " + value);
-                    await this.plugin.updateSettings({ fixIMEProblem: value });
-                })
-            );
+        if (this.plugin.settings.advancedSettings) {
+            // Toggle setting to exclude links in the current line start for fixing IME
+            new Setting(containerEl)
+                .setName('Fix IME problem')
+                .setDesc(
+                    'If activated, there will be no links in the current line start which is followed immediately by the Input Method Editor (IME). This is the recommended setting if you are using IME (input method editor) for typing, e.g. for chinese characters, because instant linking might interfere with IME.'
+                )
+                .addToggle((toggle) =>
+                    toggle.setValue(this.plugin.settings.fixIMEProblem).onChange(async (value) => {
+                        // console.log("Exclude links in current line: " + value);
+                        await this.plugin.updateSettings({ fixIMEProblem: value });
+                    })
+                );
+        }
 
-        // Toggle setting to exclude links in the current line
-        new Setting(containerEl)
-            .setName('Avoid linking in current line')
-            .setDesc('If activated, there will be no links in the current line.')
-            .addToggle((toggle) =>
-                toggle.setValue(this.plugin.settings.excludeLinksInCurrentLine).onChange(async (value) => {
-                    // console.log("Exclude links in current line: " + value);
-                    await this.plugin.updateSettings({ excludeLinksInCurrentLine: value });
-                })
-            );
+        if (this.plugin.settings.advancedSettings) {
+            // Toggle setting to exclude links in the current line
+            new Setting(containerEl)
+                .setName('Avoid linking in current line')
+                .setDesc('If activated, there will be no links in the current line.')
+                .addToggle((toggle) =>
+                    toggle.setValue(this.plugin.settings.excludeLinksInCurrentLine).onChange(async (value) => {
+                        // console.log("Exclude links in current line: " + value);
+                        await this.plugin.updateSettings({ excludeLinksInCurrentLine: value });
+                    })
+                );
 
-		new Setting(containerEl).setName('Case sensitivity').setHeading();
-		
+            // Input for setting the word boundary regex
+            // new Setting(containerEl)
+            // 	.setName('Word boundary regex')
+            // 	.setDesc('The regex for the word boundary. This regex is used to find the beginning and end of a word. It is used to find the boundaries of the words to match. Defaults to /[\t- !-/:-@\[-`{-~\p{Emoji_Presentation}\p{Extended_Pictographic}]/u to catch most word boundaries.')
+            // 	.addText((text) =>
+            // 		text
+            // 			.setValue(this.plugin.settings.wordBoundaryRegex)
+            // 			.onChange(async (value) => {
+            // 				try {
+            // 					await this.plugin.updateSettings({ wordBoundaryRegex: value });
+            // 				} catch (e) {
+            // 					console.error('Invalid regex', e);
+            // 				}
+            // 			})
+            // 	);
+        }
+
+        new Setting(containerEl).setName('Case sensitivity').setHeading();
 
         // Toggle setting for case sensitivity
         new Setting(containerEl)
@@ -605,78 +656,82 @@ class LinkerSettingTab extends PluginSettingTab {
                 })
             );
 
-		// Number input setting for capital letter proportion for automatic match case
-		new Setting(containerEl)
-			.setName('Capital letter percentage for automatic match case')
-			.setDesc('The percentage (0 - 100) of capital letters in a file name or alias to be automatically considered as case sensitive.')
-			.addText((text) =>
-				text.setValue((this.plugin.settings.capitalLetterProportionForAutomaticMatchCase * 100).toFixed(1))
-					.onChange(async (value) => {
-						let newValue = parseFloat(value);
-						if (isNaN(newValue)) {
-							newValue = 75;
-						} else if (newValue < 0) {
-							newValue = 0;
-						}
-						else if (newValue > 100) {
-							newValue = 100;
-						}
-						newValue /= 100;
-
-						// console.log("New capital letter proportion for automatic match case: " + newValue);
-						await this.plugin.updateSettings({ capitalLetterProportionForAutomaticMatchCase: newValue });
-					})
-			);
-						
-
-        if (this.plugin.settings.matchCaseSensitive) {
-            // Text setting for tag to ignore case
+        if (this.plugin.settings.advancedSettings) {
+            // Number input setting for capital letter proportion for automatic match case
             new Setting(containerEl)
-                .setName('Tag to ignore case')
-                .setDesc('By adding this tag to a file, the linker will ignore the case for the file.')
+                .setName('Capital letter percentage for automatic match case')
+                .setDesc(
+                    'The percentage (0 - 100) of capital letters in a file name or alias to be automatically considered as case sensitive.'
+                )
                 .addText((text) =>
-                    text.setValue(this.plugin.settings.tagToIgnoreCase).onChange(async (value) => {
-                        // console.log("New tag to ignore case: " + value);
-                        await this.plugin.updateSettings({ tagToIgnoreCase: value });
+                    text
+                        .setValue((this.plugin.settings.capitalLetterProportionForAutomaticMatchCase * 100).toFixed(1))
+                        .onChange(async (value) => {
+                            let newValue = parseFloat(value);
+                            if (isNaN(newValue)) {
+                                newValue = 75;
+                            } else if (newValue < 0) {
+                                newValue = 0;
+                            } else if (newValue > 100) {
+                                newValue = 100;
+                            }
+                            newValue /= 100;
+
+                            // console.log("New capital letter proportion for automatic match case: " + newValue);
+                            await this.plugin.updateSettings({ capitalLetterProportionForAutomaticMatchCase: newValue });
+                        })
+                );
+
+            if (this.plugin.settings.matchCaseSensitive) {
+                // Text setting for tag to ignore case
+                new Setting(containerEl)
+                    .setName('Tag to ignore case')
+                    .setDesc('By adding this tag to a file, the linker will ignore the case for the file.')
+                    .addText((text) =>
+                        text.setValue(this.plugin.settings.tagToIgnoreCase).onChange(async (value) => {
+                            // console.log("New tag to ignore case: " + value);
+                            await this.plugin.updateSettings({ tagToIgnoreCase: value });
+                        })
+                    );
+            } else {
+                // Text setting for tag to match case
+                new Setting(containerEl)
+                    .setName('Tag to match case')
+                    .setDesc('By adding this tag to a file, the linker will match the case for the file.')
+                    .addText((text) =>
+                        text.setValue(this.plugin.settings.tagToMatchCase).onChange(async (value) => {
+                            // console.log("New tag to match case: " + value);
+                            await this.plugin.updateSettings({ tagToMatchCase: value });
+                        })
+                    );
+            }
+
+            // Text setting for property name to ignore case
+            new Setting(containerEl)
+                .setName('Property name to ignore case')
+                .setDesc(
+                    'By adding this property to a note, containing a list of names, the linker will ignore the case for the specified names / aliases. This way you can decide, which alias should be insensitive.'
+                )
+                .addText((text) =>
+                    text.setValue(this.plugin.settings.propertyNameToIgnoreCase).onChange(async (value) => {
+                        // console.log("New property name to ignore case: " + value);
+                        await this.plugin.updateSettings({ propertyNameToIgnoreCase: value });
                     })
                 );
-        } else {
-            // Text setting for tag to match case
+
+            // Text setting for property name to match case
             new Setting(containerEl)
-                .setName('Tag to match case')
-                .setDesc('By adding this tag to a file, the linker will match the case for the file.')
+                .setName('Property name to match case')
+                .setDesc(
+                    'By adding this property to a note, containing a list of names, the linker will match the case for the specified names / aliases. This way you can decide, which alias should be case sensitive.'
+                )
                 .addText((text) =>
-                    text.setValue(this.plugin.settings.tagToMatchCase).onChange(async (value) => {
-                        // console.log("New tag to match case: " + value);
-                        await this.plugin.updateSettings({ tagToMatchCase: value });
+                    text.setValue(this.plugin.settings.propertyNameToMatchCase).onChange(async (value) => {
+                        // console.log("New property name to match case: " + value);
+                        await this.plugin.updateSettings({ propertyNameToMatchCase: value });
                     })
                 );
         }
-
-		// Text setting for property name to ignore case
-		new Setting(containerEl)
-			.setName('Property name to ignore case')
-			.setDesc('By adding this property to a note, containing a list of names, the linker will ignore the case for the specified names / aliases. This way you can decide, which alias should be insensitive.')
-			.addText((text) =>
-				text.setValue(this.plugin.settings.propertyNameToIgnoreCase).onChange(async (value) => {
-					// console.log("New property name to ignore case: " + value);
-					await this.plugin.updateSettings({ propertyNameToIgnoreCase: value });
-				})
-			);
-
-			
-		// Text setting for property name to match case
-		new Setting(containerEl)
-			.setName('Property name to match case')
-			.setDesc('By adding this property to a note, containing a list of names, the linker will match the case for the specified names / aliases. This way you can decide, which alias should be case sensitive.')
-			.addText((text) =>
-				text.setValue(this.plugin.settings.propertyNameToMatchCase).onChange(async (value) => {
-					// console.log("New property name to match case: " + value);
-					await this.plugin.updateSettings({ propertyNameToMatchCase: value });
-				})
-			);
-
-
 
         new Setting(containerEl).setName('Matched files').setHeading();
 
@@ -721,15 +776,79 @@ class LinkerSettingTab extends PluginSettingTab {
                     text.inputEl.addClass('linker-settings-text-box');
                 });
         } else {
+            if (this.plugin.settings.advancedSettings) {
+                new Setting(containerEl)
+                    .setName('Excluded directories')
+                    .setDesc(
+                        'Directories from which files are to be excluded for the virtual linker (separated by new lines). Files in these directories will not create any virtual links in other files.'
+                    )
+                    .addTextArea((text) => {
+                        let setValue = '';
+                        try {
+                            setValue = this.plugin.settings.excludedDirectories.join('\n');
+                        } catch (e) {
+                            console.warn(e);
+                        }
+
+                        text.setPlaceholder('List of directory names (separated by new line)')
+                            .setValue(setValue)
+                            .onChange(async (value) => {
+                                this.plugin.settings.excludedDirectories = value
+                                    .split('\n')
+                                    .map((x) => x.trim())
+                                    .filter((x) => x.length > 0);
+                                // console.log("New folder name: " + value, this.plugin.settings.excludedDirectories);
+                                await this.plugin.updateSettings();
+                            });
+
+                        // Set default size
+                        text.inputEl.addClass('linker-settings-text-box');
+                    });
+            }
+        }
+
+        if (this.plugin.settings.advancedSettings) {
+            // Text setting for tag to include file
             new Setting(containerEl)
-                .setName('Excluded directories')
-                .setDesc(
-                    'Directories from which files are to be excluded for the virtual linker (separated by new lines). Files in these directories will not create any virtual links in other files.'
-                )
+                .setName('Tag to include file')
+                .setDesc('Tag to explicitly include the file for the linker.')
+                .addText((text) =>
+                    text.setValue(this.plugin.settings.tagToIncludeFile).onChange(async (value) => {
+                        // console.log("New tag to include file: " + value);
+                        await this.plugin.updateSettings({ tagToIncludeFile: value });
+                    })
+                );
+
+            // Text setting for tag to ignore file
+            new Setting(containerEl)
+                .setName('Tag to ignore file')
+                .setDesc('Tag to ignore the file for the linker.')
+                .addText((text) =>
+                    text.setValue(this.plugin.settings.tagToExcludeFile).onChange(async (value) => {
+                        // console.log("New tag to ignore file: " + value);
+                        await this.plugin.updateSettings({ tagToExcludeFile: value });
+                    })
+                );
+
+            // Toggle setting to exclude links to the active file
+            new Setting(containerEl)
+                .setName('Exclude self-links to the current note')
+                .setDesc('If toggled, links to the note itself are excluded from the linker. (This might not work in preview windows.)')
+                .addToggle((toggle) =>
+                    toggle.setValue(this.plugin.settings.excludeLinksToOwnNote).onChange(async (value) => {
+                        // console.log("Exclude links to active file: " + value);
+                        await this.plugin.updateSettings({ excludeLinksToOwnNote: value });
+                    })
+                );
+
+            // Setting to exclude directories from the linker to be executed
+            new Setting(containerEl)
+                .setName('Excluded directories for generating virtual links')
+                .setDesc('Directories in which the plugin will not create virtual links (separated by new lines).')
                 .addTextArea((text) => {
                     let setValue = '';
                     try {
-                        setValue = this.plugin.settings.excludedDirectories.join('\n');
+                        setValue = this.plugin.settings.excludedDirectoriesForLinking.join('\n');
                     } catch (e) {
                         console.warn(e);
                     }
@@ -737,11 +856,11 @@ class LinkerSettingTab extends PluginSettingTab {
                     text.setPlaceholder('List of directory names (separated by new line)')
                         .setValue(setValue)
                         .onChange(async (value) => {
-                            this.plugin.settings.excludedDirectories = value
+                            this.plugin.settings.excludedDirectoriesForLinking = value
                                 .split('\n')
                                 .map((x) => x.trim())
                                 .filter((x) => x.length > 0);
-                            // console.log("New folder name: " + value, this.plugin.settings.excludedDirectories);
+                            // console.log("New folder name: " + value, this.plugin.settings.excludedDirectoriesForLinking);
                             await this.plugin.updateSettings();
                         });
 
@@ -749,66 +868,6 @@ class LinkerSettingTab extends PluginSettingTab {
                     text.inputEl.addClass('linker-settings-text-box');
                 });
         }
-
-        // Text setting for tag to include file
-        new Setting(containerEl)
-            .setName('Tag to include file')
-            .setDesc('Tag to explicitly include the file for the linker.')
-            .addText((text) =>
-                text.setValue(this.plugin.settings.tagToIncludeFile).onChange(async (value) => {
-                    // console.log("New tag to include file: " + value);
-                    await this.plugin.updateSettings({ tagToIncludeFile: value });
-                })
-            );
-
-        // Text setting for tag to ignore file
-        new Setting(containerEl)
-            .setName('Tag to ignore file')
-            .setDesc('Tag to ignore the file for the linker.')
-            .addText((text) =>
-                text.setValue(this.plugin.settings.tagToExcludeFile).onChange(async (value) => {
-                    // console.log("New tag to ignore file: " + value);
-                    await this.plugin.updateSettings({ tagToExcludeFile: value });
-                })
-            );
-
-        // Toggle setting to exclude links to the active file
-        new Setting(containerEl)
-            .setName('Exclude self-links to the current note')
-            .setDesc('If toggled, links to the note itself are excluded from the linker. (This might not work in preview windows.)')
-            .addToggle((toggle) =>
-                toggle.setValue(this.plugin.settings.excludeLinksToOwnNote).onChange(async (value) => {
-                    // console.log("Exclude links to active file: " + value);
-                    await this.plugin.updateSettings({ excludeLinksToOwnNote: value });
-                })
-            );
-
-        // Setting to exclude directories from the linker to be executed
-        new Setting(containerEl)
-            .setName('Excluded directories for generating virtual links')
-            .setDesc('Directories in which the plugin will not create virtual links (separated by new lines).')
-            .addTextArea((text) => {
-                let setValue = '';
-                try {
-                    setValue = this.plugin.settings.excludedDirectoriesForLinking.join('\n');
-                } catch (e) {
-                    console.warn(e);
-                }
-
-                text.setPlaceholder('List of directory names (separated by new line)')
-                    .setValue(setValue)
-                    .onChange(async (value) => {
-                        this.plugin.settings.excludedDirectoriesForLinking = value
-                            .split('\n')
-                            .map((x) => x.trim())
-                            .filter((x) => x.length > 0);
-                        // console.log("New folder name: " + value, this.plugin.settings.excludedDirectoriesForLinking);
-                        await this.plugin.updateSettings();
-                    });
-
-                // Set default size
-                text.inputEl.addClass('linker-settings-text-box');
-            });
 
         new Setting(containerEl).setName('Link style').setHeading();
 
