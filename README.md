@@ -106,31 +106,25 @@ You can turn off this default styling in the settings.
 To apply custom styling to the links, you can add a CSS-snippet at `VaultFolder/.obsidian/snippets/virtualLinks.css` file.
 
 ```css
-/* E.g. to change the color of all link texts to red */
-.virtual-link a{ 
-    color: red !important;
-}
-```
-For example, if you want to apply different styles for the normal look of virtual links and when they are hovered, you can add the following snippet:
-
-```css
-/* properties of the virtual link when not hovered */
-.virtual-link a {
-    // To have the normal text color when not hovered
+/* Properties of the virtual link when not hovered */
+.virtual-link.glossary-entry a {
+    /* To have the normal text color when not hovered */
     color: inherit;
 
-    // Or add a color, e.g. red
-    // color:  red !important; 
+    /* Or add a color, e.g. red */
+    /* color: red; */
 
-    // You can also change the underline of the link in thickness and color
+    /* You can also change the underline of the link in thickness, color, and other properties */
     text-decoration-thickness: 1px;
-    text-underline-offset: 0.245em;
-    text-decoration-color: rgb(70, 100, 70, 0.33);
+    text-decoration-color: rgb(var(--color-purple-rgb), 0.6);
+    text-underline-position: under;
+    /* text-decoration-style: dotted; */
+    /* text-underline-offset: 0em; */
 }
 
-/* properties of the virtual link when hovered */
-.virtual-link a:hover {
-    color: rgb(70, 100, 70, 1);
+/* Properties of the virtual link when hovered */
+.virtual-link.glossary-entry a:hover {
+    color: var(--link-color);
 }
 ```
 
