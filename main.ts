@@ -40,6 +40,7 @@ export interface LinkerPluginSettings {
     onlyLinkOnce: boolean;
     excludeLinksToRealLinkedFiles: boolean;
     includeAliases: boolean;
+    alwaysShowMultipleReferences: boolean;
     // wordBoundaryRegex: string;
     // conversionFormat
 }
@@ -77,6 +78,7 @@ const DEFAULT_SETTINGS: LinkerPluginSettings = {
     onlyLinkOnce: true,
     excludeLinksToRealLinkedFiles: true,
     includeAliases: true,
+    alwaysShowMultipleReferences: false,
     // wordBoundaryRegex: '/[\t- !-/:-@\[-`{-~\p{Emoji_Presentation}\p{Extended_Pictographic}]/u',
 };
 
@@ -871,6 +873,16 @@ class LinkerSettingTab extends PluginSettingTab {
 
         new Setting(containerEl).setName('Link style').setHeading();
 
+        new Setting(containerEl)
+            .setName('Always show multiple references')
+            .setDesc('If toggled, if there are multiple matching notes, all references are shown behind the match. If not toggled, the references are only shown if hovering over the match.')
+            .addToggle((toggle) =>
+                toggle.setValue(this.plugin.settings.alwaysShowMultipleReferences).onChange(async (value) => {
+                    // console.log("Always show multiple references: " + value);
+                    await this.plugin.updateSettings({ alwaysShowMultipleReferences: value });
+                })
+            );
+            
         new Setting(containerEl)
             .setName('Virtual link suffix')
             .setDesc('The suffix to add to auto generated virtual links.')
