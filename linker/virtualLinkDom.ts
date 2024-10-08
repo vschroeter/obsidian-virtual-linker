@@ -23,7 +23,9 @@ export class VirtualMatch {
         const firstPath = this.files.length > 0 ? this.files[0].path: ""; 
         span.appendChild(this.getLinkAnchorElement(this.originText, firstPath));
         if (this.files.length > 1) {
-            span.appendChild(this.getMultipleReferencesIndicatorSpan());
+            if (!this.isSubWord) {
+                span.appendChild(this.getMultipleReferencesIndicatorSpan());
+            }
             span.appendChild(this.getMultipleReferencesSpan());
         }
 
@@ -66,7 +68,7 @@ export class VirtualMatch {
         files.forEach((file, index) => {
             if (index === 0) {
                 const bracket = document.createElement('span');
-                bracket.textContent = ' [';
+                bracket.textContent = this.isSubWord ? '[' : ' [';
                 spanReferences.appendChild(bracket);
             }
 

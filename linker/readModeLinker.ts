@@ -2,6 +2,7 @@ import { App, getLinkpath, MarkdownPostProcessorContext, MarkdownRenderChild, TF
 
 import { LinkerPluginSettings } from '../main';
 import { LinkerCache, PrefixTree } from './linkerCache';
+import { VirtualMatch } from './virtualLinkDom';
 
 export class GlossaryLinker extends MarkdownRenderChild {
     text: string;
@@ -81,15 +82,7 @@ export class GlossaryLinker extends MarkdownRenderChild {
                         if (text.length === 0) continue;
 
                         this.linkerCache.reset();
-                        const additions: {
-                            id: number;
-                            from: number;
-                            to: number;
-                            text: string;
-                            file: TFile;
-                            isSubWord: boolean;
-                            isAlias: boolean;
-                        }[] = [];
+                        let matches: VirtualMatch[] = [];
 
                         let id = 0;
 
@@ -104,23 +97,26 @@ export class GlossaryLinker extends MarkdownRenderChild {
                             if (!this.settings.matchOnlyWholeWords || this.settings.matchBeginningOfWords || isWordBoundary) {
                                 const currentNodes = this.linkerCache.cache.getCurrentMatchNodes(i);
                                 if (currentNodes.length > 0) {
-                                    // TODO: Handle multiple matches
-                                    const node = currentNodes[0];
-                                    const nFrom = node.start;
-                                    const nTo = node.end;
-                                    const name = text.slice(nFrom, nTo);
+                                    currentNodes.forEach((node) => {
+                                        const nFrom = node.start;
+                                        const nTo = node.end;
+                                        const name = text.slice(nFrom, nTo);
 
-                                    // TODO: Handle multiple files
-                                    const file = node.files.values().next().value;
+                                        // TODO: Handle multiple files
+                                        // const file = node.files.values().next().value;
 
-                                    additions.push({
-                                        id: id++,
-                                        from: nFrom,
-                                        to: nTo,
-                                        text: name,
-                                        file: file,
-                                        isSubWord: !isWordBoundary,
-                                        isAlias: node.isAlias,
+                                        matches.push(
+                                            new VirtualMatch(
+                                                id++,
+                                                name,
+                                                nFrom,
+                                                nTo,
+                                                Array.from(node.files),
+                                                node.isAlias,
+                                                !isWordBoundary,
+                                                this.settings
+                                            )
+                                        );
                                     });
                                 }
                             }
@@ -131,132 +127,39 @@ export class GlossaryLinker extends MarkdownRenderChild {
                         }
 
                         // Sort additions by from position
-                        additions.sort((a, b) => {
-                            if (a.from === b.from) {
-                                return b.to - a.to;
-                            }
-                            return a.from - b.from;
-                        });
-
-                        const filteredAdditions = [];
-                        const additionsToDelete: Map<number, boolean> = new Map();
+                        matches = VirtualMatch.sort(matches);
 
                         // Delete additions that links to already linked files
                         if (this.settings.excludeLinksToRealLinkedFiles) {
-                            for (const addition of additions) {
-                                if (explicitlyLinkedFiles.has(addition.file)) {
-                                    additionsToDelete.set(addition.id, true);
-                                }
-                            }
+                            matches = VirtualMatch.filterAlreadyLinked(matches, explicitlyLinkedFiles);
                         }
 
-                        // Delete all additions to already virtually linked files
+                        // Delete additions that links to already linked files
                         if (this.settings.onlyLinkOnce) {
-                            for (const addition of additions) {
-                                if (linkedFiles.has(addition.file)) {
-                                    additionsToDelete.set(addition.id, true);
-                                }
-                            }
+                            matches = VirtualMatch.filterAlreadyLinked(matches, linkedFiles);
                         }
-
                         // Delete additions that overlap
                         // Additions are sorted by from position and after that by length, we want to keep longer additions
-                        for (let i = 0; i < additions.length; i++) {
-                            const addition = additions[i];
-                            if (additionsToDelete.has(addition.id)) {
-                                continue;
-                            }
-
-                            // Set all overlapping additions to be deleted
-                            for (let j = i + 1; j < additions.length; j++) {
-                                const otherAddition = additions[j];
-                                if (otherAddition.from >= addition.to) {
-                                    break;
-                                }
-                                additionsToDelete.set(otherAddition.id, true);
-                            }
-
-                            // Set all additions that link to the same file to be deleted
-                            if (this.settings.onlyLinkOnce) {
-                                for (let j = i + 1; j < additions.length; j++) {
-                                    const otherAddition = additions[j];
-                                    if (additionsToDelete.has(otherAddition.id)) {
-                                        continue;
-                                    }
-
-                                    if (otherAddition.file.path === addition.file.path) {
-                                        additionsToDelete.set(otherAddition.id, true);
-                                    }
-                                }
-                            }
-                        }
-
-                        for (const addition of additions) {
-                            if (!additionsToDelete.has(addition.id)) {
-                                filteredAdditions.push(addition);
-                            }
-                        }
+                        matches = VirtualMatch.filterOverlapping(matches, this.settings.onlyLinkOnce);
 
                         const parent = childNode.parentElement;
                         let lastTo = 0;
                         // console.log("Parent: ", parent);
 
-                        for (let addition of filteredAdditions) {
-                            linkedFiles.add(addition.file);
+                        matches.forEach((match) => {
+                            match.files.forEach((f) => linkedFiles.add(f));
 
-                            // get linkpath
-                            const destName = this.ctx.sourcePath.replace(/(.*).md/, '$1');
-                            // const destName = this.ctx.sourcePath;
+                            const span = match.getCompleteLinkElement();
 
-                            // const linkpath = this.getClosestLinkPath(glossaryEntryName);
-                            const linkpath = addition.file.path;
-
-                            const replacementText = addition.text;
-                            // console.log("Replacement text: ", replacementText);
-
-                            // create link
-                            let span = document.createElement('span');
-                            span.classList.add('glossary-entry', 'virtual-link');
-                            if (this.settings.applyDefaultLinkStyling) {
-                                span.classList.add('virtual-link-default');
-                            }
-
-                            let link = this.containerEl.createEl('a');
-                            // let el = document.createElement("a");
-                            link.text = `${replacementText}`; // + this.settings.glossarySuffix;
-                            link.href = `${linkpath}`;
-                            // el.setAttribute("data-href", glossaryEntryName);
-                            link.setAttribute('data-href', `${linkpath}`);
-                            link.classList.add('internal-link');
-                            // link.classList.add("glossary-entry");
-                            link.classList.add('virtual-link-a');
-                            // link.setAttribute("from", addition.from.toString());
-                            // link.setAttribute("to", addition.to.toString());
-                            link.setAttribute('origin-text', this.text);
-
-                            link.target = '_blank';
-                            link.rel = 'noopener';
-
-                            span.appendChild(link);
-
-                            if (!addition.isSubWord || !this.settings.suppressSuffixForSubWords) {
-                                const suffix = addition.isAlias ? this.settings.virtualLinkAliasSuffix : this.settings.virtualLinkSuffix;
-                                if ((suffix?.length ?? 0) > 0) {
-                                    let icon = document.createElement('sup');
-                                    icon.textContent = suffix;
-                                    icon.classList.add('linker-suffix-icon');
-                                    span.appendChild(icon);
-                                }
-                            }
-
-                            if (addition.from > 0) {
-                                parent?.insertBefore(document.createTextNode(text.slice(lastTo, addition.from)), childNode);
+                            
+                            if (match.from > 0) {
+                                parent?.insertBefore(document.createTextNode(text.slice(lastTo, match.from)), childNode);
                             }
 
                             parent?.insertBefore(span, childNode);
+                            lastTo = match.to;
+                        })
 
-                            lastTo = addition.to;
-                        }
                         const textLength = text.length;
                         if (lastTo < textLength) {
                             parent?.insertBefore(document.createTextNode(text.slice(lastTo)), childNode);

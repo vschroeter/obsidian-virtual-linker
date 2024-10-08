@@ -22,136 +22,11 @@ function isDescendant(parent: HTMLElement, child: HTMLElement, maxDepth: number 
 }
 
 export class VirtualLinkWidget extends WidgetType {
-    constructor(
-        public match: VirtualMatch,
-    ) {
+    constructor(public match: VirtualMatch) {
         super();
     }
     toDOM(view: EditorView): HTMLElement {
         return this.match.getCompleteLinkElement();
-    }
-}
-
-export class LiveLinkWidget extends WidgetType {
-    constructor(
-        public text: string,
-        public linkFiles: TFile | TFile[],
-        public from: number,
-        public to: number,
-        public isSubWord: boolean,
-        public isAlias: boolean,
-        public app: App,
-        private settings: LinkerPluginSettings
-    ) {
-        super();
-        // console.log(text, linkFile, app)
-    }
-
-    getLinkElement(text: string, href: string) {
-        const link = document.createElement('a');
-        link.href = href;
-        link.textContent = text;
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-        link.setAttribute('from', this.from.toString());
-        link.setAttribute('to', this.to.toString());
-        link.setAttribute('origin-text', this.text);
-        link.classList.add('internal-link', 'virtual-link-a');
-        return link;
-    }
-
-    createInternalLinkSpan() {
-        // if (!this.app) {
-        //     return null;
-        // }
-        if (!Array.isArray(this.linkFiles)) {
-            this.linkFiles = [this.linkFiles];
-        }
-
-        if (this.linkFiles.length === 0) {
-            return document.createElement('span');
-        }
-
-        const hasMultipleFiles = this.linkFiles.length > 1;
-        const firstFile = this.linkFiles[0];
-
-        const note = this.linkFiles;
-        // const linkText = note.basename;
-        const linkText = this.text;
-        let linkHref = '';
-        try {
-            // linkHref = note.path;
-            linkHref = firstFile.path;
-        } catch (e) {
-            console.error(e);
-        }
-
-        const span = document.createElement('span');
-        span.classList.add('glossary-entry', 'virtual-link', 'virtual-link-span');
-        if (this.settings.applyDefaultLinkStyling) {
-            span.classList.add('virtual-link-default');
-        }
-
-        const link = this.getLinkElement(linkText, linkHref);
-        span.appendChild(link);
-
-        // If there is more than 1 file, add all possible references in brackets behind the link
-
-        if (hasMultipleFiles) {
-            const spanReferences = document.createElement('span');
-         
-            if (!this.settings.alwaysShowMultipleReferences) {
-                const spanIndicator = document.createElement('span');
-
-                spanIndicator.textContent = ' [...]';
-                spanIndicator.classList.add('multiple-files-indicator');
-                span.appendChild(spanIndicator);
-
-                spanReferences.classList.add('multiple-files-references');
-            }
-
-            const files = this.linkFiles as TFile[];
-            files.forEach((file, index) => {
-                if (index === 0) {
-                    const bracket = document.createElement('span');
-                    bracket.textContent = ' [';
-                    spanReferences.appendChild(bracket);
-                }
-
-                let linkText = ` ${index + 1} `;
-                if (index < files.length - 1) {
-                    linkText += '|';
-                }
-
-                let linkHref = file.path;
-                const link = this.getLinkElement(linkText, linkHref);
-                spanReferences.appendChild(link);
-
-                if (index == files.length - 1) {
-                    const bracket = document.createElement('span');
-                    bracket.textContent = ']';
-                    spanReferences.appendChild(bracket);
-                }
-            });
-            span.appendChild(spanReferences);
-        }
-
-        if (!this.isSubWord || !this.settings.suppressSuffixForSubWords) {
-            const suffix = this.isAlias ? this.settings.virtualLinkAliasSuffix : this.settings.virtualLinkSuffix;
-            if ((suffix?.length ?? 0) > 0) {
-                let icon = document.createElement('sup');
-                icon.textContent = suffix;
-                icon.classList.add('linker-suffix-icon');
-                span.appendChild(icon);
-            }
-        }
-
-        return span;
-    }
-
-    toDOM(view: EditorView): HTMLElement {
-        const div = this.createInternalLinkSpan();
-        return div;
     }
 }
 
@@ -251,7 +126,7 @@ class AutoLinkerPlugin implements PluginValue {
 
             // For every glossary file and its aliases we now search the text for occurrences
             // const additions: { id: number; files: TFile[]; from: number; to: number; widget: WidgetType }[] = [];
-            let additions: VirtualMatch[] = [];
+            let matches: VirtualMatch[] = [];
             let id = 0;
             // Iterate over every char in the text
             for (let i = 0; i <= text.length; i) {
@@ -267,7 +142,7 @@ class AutoLinkerPlugin implements PluginValue {
                         this.settings.excludeLinksToOwnNote ? mappedFile : null
                     );
                     if (currentNodes.length > 0) {
-                        console.log('NODES', currentNodes);
+                        // console.log('NODES', currentNodes);
                         for (const node of currentNodes) {
                             const nFrom = node.start;
                             const nTo = node.end;
@@ -279,41 +154,9 @@ class AutoLinkerPlugin implements PluginValue {
 
                             // console.log("MATCH", name, aFrom, aTo, node.caseIsMatched, node.requiresCaseMatch)
 
-                            // if (node.files.size > 1) {
-                            //     console.log('Multiple files for', name, node.files);
-                            // }
-                            // TODO: Handle multiple files
-                            // const file: TFile = node.files.values().next().value;
-                            additions.push(
-                                new VirtualMatch(
-                                    id++,
-                                    name,
-                                    aFrom,
-                                    aTo,
-                                    Array.from(node.files),
-                                    isAlias,
-                                    !isWordBoundary,
-                                    this.settings,
-                                )
-                            )
-                            // node.files.forEach((file) => {
-                            //     additions.push({
-                            //         id: id++,
-                            //         from: aFrom,
-                            //         to: aTo,
-                            //         files: Array.from(node.files),
-                            //         widget: new LiveLinkWidget(
-                            //             name,
-                            //             Array.from(node.files),
-                            //             aFrom,
-                            //             aTo,
-                            //             !isWordBoundary,
-                            //             isAlias,
-                            //             this.app,
-                            //             this.settings
-                            //         ),
-                            //     });
-                            // });
+                            matches.push(
+                                new VirtualMatch(id++, name, aFrom, aTo, Array.from(node.files), isAlias, !isWordBoundary, this.settings)
+                            );
                         }
                     }
                 }
@@ -324,17 +167,8 @@ class AutoLinkerPlugin implements PluginValue {
                 i += char.length;
             }
 
-            // Sort additions by from position
-            additions = VirtualMatch.sort(additions);
-            // additions.sort((a, b) => {
-            //     if (a.from === b.from) {
-            //         if (b.to == a.to) {
-            //             return b.files.length - a.files.length;
-            //         }
-            //         return b.to - a.to;
-            //     }
-            //     return a.from - b.from;
-            // });
+            // Sort additions by position and files length
+            matches = VirtualMatch.sort(matches);
 
             // We want to exclude some syntax nodes from being decorated,
             // such as code blocks and manually added links
@@ -380,76 +214,22 @@ class AutoLinkerPlugin implements PluginValue {
                 },
             });
 
-            const filteredAdditions = [];
-            const additionsToDelete: Map<number, boolean> = new Map();
-
             // Delete additions that links to already linked files
             if (this.settings.excludeLinksToRealLinkedFiles) {
-                additions = VirtualMatch.filterAlreadyLinked(additions, explicitlyLinkedFiles);
-                // for (const addition of additions) {
-                //     if (addition.files.every(f => explicitlyLinkedFiles.has(f))) {
-                //         additionsToDelete.set(addition.id, true);
-                //     }
-                // }
+                matches = VirtualMatch.filterAlreadyLinked(matches, explicitlyLinkedFiles);
             }
 
             // Delete additions that links to already linked files
             if (this.settings.onlyLinkOnce) {
-                additions = VirtualMatch.filterAlreadyLinked(additions, alreadyLinkedFiles);
-                // for (const addition of additions) {
-                //     if (addition.files.every(f => alreadyLinkedFiles.has(f))) {
-                //         additionsToDelete.set(addition.id, true);
-                //     }
-                // }
+                matches = VirtualMatch.filterAlreadyLinked(matches, alreadyLinkedFiles);
             }
 
             // Delete additions that overlap
             // Additions are sorted by from position and after that by length, we want to keep longer additions
-            additions = VirtualMatch.filterOverlapping(additions, this.settings.onlyLinkOnce, excludedIntervalTree);
-            // for (let i = 0; i < additions.length; i++) {
-            //     const addition = additions[i];
-            //     if (additionsToDelete.has(addition.id)) {
-            //         continue;
-            //     }
+            matches = VirtualMatch.filterOverlapping(matches, this.settings.onlyLinkOnce, excludedIntervalTree);
 
-            //     // Check if the addition is inside an excluded block
-            //     const overlaps = excludedIntervalTree.search([addition.from, addition.to]);
-            //     if (overlaps.length > 0) {
-            //         additionsToDelete.set(addition.id, true);
-            //         continue;
-            //     }
-
-            //     // Set all overlapping additions to be deleted
-            //     for (let j = i + 1; j < additions.length; j++) {
-            //         const otherAddition = additions[j];
-            //         if (otherAddition.from >= addition.to) {
-            //             break;
-            //         }
-            //         additionsToDelete.set(otherAddition.id, true);
-            //     }
-
-            //     // Set all additions that link to the same file to be deleted
-            //     if (this.settings.onlyLinkOnce) {
-            //         for (let j = i + 1; j < additions.length; j++) {
-            //             const otherAddition = additions[j];
-            //             if (additionsToDelete.has(otherAddition.id)) {
-            //                 continue;
-            //             }
-
-            //             if (otherAddition.files.every(f => addition.files.contains(f))) {
-            //                 additionsToDelete.set(otherAddition.id, true);
-            //             }
-            //         }
-            //     }
-            // }
-
-            additions.forEach(addition => addition.files.forEach(f => alreadyLinkedFiles.add(f)));
-            // for (const addition of additions) {
-            //     if (!additionsToDelete.has(addition.id)) {
-            //         filteredAdditions.push(addition);
-            //         addition.files.forEach(f => alreadyLinkedFiles.add(f));
-            //     }
-            // }
+            // Store the files that are linked by a virtual link
+            matches.forEach((addition) => addition.files.forEach((f) => alreadyLinkedFiles.add(f)));
 
             // Get the cursor position
             const cursorPos = view.state.selection.main.from;
@@ -464,7 +244,7 @@ class AutoLinkerPlugin implements PluginValue {
             const lineStart = view.state.doc.lineAt(cursorPos).from;
             const lineEnd = view.state.doc.lineAt(cursorPos).to;
 
-            additions.forEach((addition) => {
+            matches.forEach((addition) => {
                 const [from, to] = [addition.from, addition.to];
                 const cursorNearby = cursorPos >= from - 0 && cursorPos <= to + 0;
 
