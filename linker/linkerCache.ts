@@ -98,7 +98,7 @@ export class PrefixTree {
 
             const fileNames = Array.from(matchNode.files).map((file) => file.basename);
             const nodeValue = node.node.value;
-            matchNode.isAlias = !fileNames.includes(nodeValue);
+            matchNode.isAlias = !(fileNames.map(n => n.toLowerCase()).includes(nodeValue.toLowerCase()));
 
             // Check if the case is matched
             let currentNode: PrefixNode | undefined = node.node;
