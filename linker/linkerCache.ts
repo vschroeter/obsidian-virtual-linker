@@ -34,9 +34,12 @@ export class PrefixNode {
 export class VisitedPrefixNode {
     node: PrefixNode;
     caseIsMatched: boolean;
-    constructor(node: PrefixNode, caseIsMatched: boolean = true) {
+    startedAtWordBeginning: boolean;
+    formattingDelta: number = 0;
+    constructor(node: PrefixNode, caseIsMatched: boolean = true, startedAtWordBeginning: boolean = false) {
         this.node = node;
         this.caseIsMatched = caseIsMatched;
+        this.startedAtWordBeginning = startedAtWordBeginning;
     }
 }
 
@@ -47,6 +50,7 @@ export class MatchNode {
     value: string = '';
     isAlias: boolean = false;
     caseIsMatched: boolean = true;
+    startsAtWordBoundary: boolean = false;
     requiresCaseMatch: boolean = false;
 
     get end(): number {
@@ -90,7 +94,7 @@ export class PrefixTree {
                 continue;
             }
             const matchNode = new MatchNode();
-            matchNode.length = node.node.value.length;
+            matchNode.length = node.node.value.length + node.formattingDelta;
             matchNode.start = index - matchNode.length;
             matchNode.files = new Set(Array.from(node.node.files).filter((file) => !excludedNote || file.path !== excludedNote.path));
             matchNode.value = node.node.value;
@@ -98,7 +102,7 @@ export class PrefixTree {
 
             const fileNames = Array.from(matchNode.files).map((file) => file.basename);
             const nodeValue = node.node.value;
-            matchNode.isAlias = !fileNames.includes(nodeValue);
+            matchNode.isAlias = !fileNames.map((n) => n.toLowerCase()).includes(nodeValue.toLowerCase());
 
             // Check if the case is matched
             let currentNode: PrefixNode | undefined = node.node;
@@ -109,6 +113,9 @@ export class PrefixTree {
                 }
                 currentNode = currentNode.parent;
             }
+
+            // Check if the match starts at a word boundary
+            matchNode.startsAtWordBoundary = node.startedAtWordBeginning;
 
             if (matchNode.requiresCaseMatch && !matchNode.caseIsMatched) {
                 continue;
@@ -393,30 +400,61 @@ export class PrefixTree {
         const chars = [char];
         chars.push(char.toLowerCase());
 
-
         chars.forEach((c) => {
             // char = char.toLowerCase();
-            if (!this.settings.matchOnlyWholeWords || PrefixTree.checkWordBoundary(c)) { // , this.settings.wordBoundaryRegex
-                newNodes.push(new VisitedPrefixNode(this.root));
+            const isBoundary = PrefixTree.checkWordBoundary(c);
+            if (this.settings.matchAnyPartsOfWords || isBoundary || this.settings.matchEndOfWords) {
+                // , this.settings.wordBoundaryRegex
+                newNodes.push(new VisitedPrefixNode(this.root, true, isBoundary));
             }
 
             for (const node of this._currentNodes) {
                 const child = node.node.children.get(c);
+                const startedAtBoundary = node.startedAtWordBeginning;
                 if (child) {
                     const newPrefixNodes = newNodes.map((n) => n.node);
                     if (!newPrefixNodes.includes(child)) {
-                        newNodes.push(new VisitedPrefixNode(child, char == c));
+                        const newVisited = new VisitedPrefixNode(child, char == c, startedAtBoundary);
+                        newVisited.formattingDelta = node.formattingDelta;
+                        newNodes.push(newVisited);
                     }
+                }
+            }
+
+            // TODO: Ignore formatting (#59)
+            if (false) {
+                // Check if the current char is a formatting char, if so also add the current nodes
+                const isFormatting = PrefixTree.isFormattingChar(char);
+                if (isFormatting) {
+                    this._currentNodes.forEach((node) => {
+                        node.formattingDelta += 1;
+                    });
+                    newNodes.push(...this._currentNodes);
                 }
             }
         });
         this._currentNodes = newNodes;
     }
 
-    static checkWordBoundary(char: string): boolean { // , regexString: string
+    static checkWordBoundary(char: string): boolean {
+        // , regexString: string
         // const pattern = /[\/\n\t\r\s,.!?:"`´()\[\]'{}|~\p{Emoji_Presentation}\p{Extended_Pictographic}]/u;
 
-        let pattern = /[\t- !-/:-@\[-`{-~\p{Emoji_Presentation}\p{Extended_Pictographic}]/u;
+        // let pattern = /[\t- !-/:-@\[-`{-~\p{Emoji_Presentation}\p{Extended_Pictographic}]/u;
+
+        // \p{L}: Any kind of letter from any language.
+        // \p{Ll}: Lowercase letter.
+        // \p{Lu}: Uppercase letter.
+        // \p{M}: Mark (accents, combining marks).
+        // \p{N}: Number (digit, letter-like number).
+        // \p{P}: Punctuation.
+        // \p{S}: Symbol (currency, math symbols, etc.).
+        // \p{Z}: Separator (space, line breaks).
+        // \p{C}: Other (control chars, unassigned, etc.).
+
+        // let pattern = /[\p{P}\p{Z}\p{S}\p{C}\p{Emoji_Presentation}\p{Extended_Pictographic}]/u;
+        let pattern = /[^\p{L}]/u;
+
         // if (regexString) {
         //     if (typeof regexString !== 'string') {
         //         regexString = regexString.toString();
@@ -435,6 +473,11 @@ export class PrefixTree {
         //     pattern = new RegExp(parts[1], parts[2]);
         // }
         // console.log('Checking word boundary', char, pattern);
+        return pattern.test(char);
+    }
+
+    static isFormattingChar(char: string): boolean {
+        const pattern = /[^\p{L}\p{N}]/u;
         return pattern.test(char);
     }
 }

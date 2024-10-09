@@ -6,6 +6,7 @@ import { App, MarkdownView, TFile, Vault } from 'obsidian';
 import IntervalTree from '@flatten-js/interval-tree';
 import { LinkerPluginSettings } from 'main';
 import { ExternalUpdateManager, LinkerCache, PrefixTree } from './linkerCache';
+import { VirtualMatch } from './virtualLinkDom';
 
 function isDescendant(parent: HTMLElement, child: HTMLElement, maxDepth: number = 10) {
     let node = child.parentNode;
@@ -20,69 +21,12 @@ function isDescendant(parent: HTMLElement, child: HTMLElement, maxDepth: number 
     return false;
 }
 
-export class LiveLinkWidget extends WidgetType {
-    constructor(
-        public text: string,
-        public linkFile: TFile,
-        public from: number,
-        public to: number,
-        public isSubWord: boolean,
-        public isAlias: boolean,
-        public app: App,
-        private settings: LinkerPluginSettings
-    ) {
+export class VirtualLinkWidget extends WidgetType {
+    constructor(public match: VirtualMatch) {
         super();
-        // console.log(text, linkFile, app)
     }
-
-    createInternalLinkSpan() {
-        // if (!this.app) {
-        //     return null;
-        // }
-        const note = this.linkFile;
-        // const linkText = note.basename;
-        const linkText = this.text;
-        let linkHref = '';
-        try {
-            linkHref = note.path;
-        } catch (e) {
-            console.error(e);
-        }
-
-        const span = document.createElement('span');
-        const link = document.createElement('a');
-
-        link.href = linkHref;
-        link.textContent = linkText;
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-        link.setAttribute('from', this.from.toString());
-        link.setAttribute('to', this.to.toString());
-        link.setAttribute('origin-text', this.text);
-        link.classList.add('internal-link', 'virtual-link-a');
-        span.classList.add('glossary-entry', 'virtual-link');
-        if (this.settings.applyDefaultLinkStyling) {
-            span.classList.add('virtual-link-default');
-        }
-
-        span.appendChild(link);
-
-        if (!this.isSubWord || !this.settings.suppressSuffixForSubWords) {
-            const suffix = this.isAlias ? this.settings.virtualLinkAliasSuffix : this.settings.virtualLinkSuffix;
-            if ((suffix?.length ?? 0) > 0) {
-                let icon = document.createElement('sup');
-                icon.textContent = suffix;
-                icon.classList.add('linker-suffix-icon');
-                span.appendChild(icon);
-            }
-        }
-
-        return span;
-    }
-
     toDOM(view: EditorView): HTMLElement {
-        const div = this.createInternalLinkSpan();
-        return div;
+        return this.match.getCompleteLinkElement();
     }
 }
 
@@ -181,8 +125,8 @@ class AutoLinkerPlugin implements PluginValue {
             const text = view.state.doc.sliceString(from, to);
 
             // For every glossary file and its aliases we now search the text for occurrences
-            const additions: { id: number; file: TFile; from: number; to: number; widget: WidgetType }[] = [];
-
+            // const additions: { id: number; files: TFile[]; from: number; to: number; widget: WidgetType }[] = [];
+            let matches: VirtualMatch[] = [];
             let id = 0;
             // Iterate over every char in the text
             for (let i = 0; i <= text.length; i) {
@@ -192,13 +136,25 @@ class AutoLinkerPlugin implements PluginValue {
 
                 // If we are at a word boundary, get the current fitting files
                 const isWordBoundary = PrefixTree.checkWordBoundary(char); // , this.settings.wordBoundaryRegex
-                if (!this.settings.matchOnlyWholeWords || this.settings.matchBeginningOfWords || isWordBoundary) {
+                if (this.settings.matchAnyPartsOfWords || this.settings.matchBeginningOfWords || isWordBoundary) {
                     const currentNodes = this.linkerCache.cache.getCurrentMatchNodes(
                         i,
                         this.settings.excludeLinksToOwnNote ? mappedFile : null
                     );
+
                     if (currentNodes.length > 0) {
+                        // console.log('NODES', currentNodes);
                         for (const node of currentNodes) {
+                            // Check if we want to include this note based on the settings
+                            if (!this.settings.matchAnyPartsOfWords) {
+                                if (
+                                    (this.settings.matchBeginningOfWords && !node.startsAtWordBoundary) &&
+                                    (this.settings.matchEndOfWords && !isWordBoundary)
+                                ) {
+                                    continue;
+                                }
+                            }
+
                             const nFrom = node.start;
                             const nTo = node.end;
                             const name = text.slice(nFrom, nTo);
@@ -209,17 +165,9 @@ class AutoLinkerPlugin implements PluginValue {
 
                             // console.log("MATCH", name, aFrom, aTo, node.caseIsMatched, node.requiresCaseMatch)
 
-                            // TODO: Handle multiple files
-                            // const file: TFile = node.files.values().next().value;
-                            node.files.forEach((file) => {
-                                additions.push({
-                                    id: id++,
-                                    from: aFrom,
-                                    to: aTo,
-                                    file: file,
-                                    widget: new LiveLinkWidget(name, file, aFrom, aTo, !isWordBoundary, isAlias, this.app, this.settings),
-                                });
-                            });
+                            matches.push(
+                                new VirtualMatch(id++, name, aFrom, aTo, Array.from(node.files), isAlias, !isWordBoundary, this.settings)
+                            );
                         }
                     }
                 }
@@ -230,13 +178,8 @@ class AutoLinkerPlugin implements PluginValue {
                 i += char.length;
             }
 
-            // Sort additions by from position
-            additions.sort((a, b) => {
-                if (a.from === b.from) {
-                    return b.to - a.to;
-                }
-                return a.from - b.from;
-            });
+            // Sort additions by position and files length
+            matches = VirtualMatch.sort(matches);
 
             // We want to exclude some syntax nodes from being decorated,
             // such as code blocks and manually added links
@@ -282,72 +225,22 @@ class AutoLinkerPlugin implements PluginValue {
                 },
             });
 
-            const filteredAdditions = [];
-            const additionsToDelete: Map<number, boolean> = new Map();
-
             // Delete additions that links to already linked files
             if (this.settings.excludeLinksToRealLinkedFiles) {
-                for (const addition of additions) {
-                    if (explicitlyLinkedFiles.has(addition.file)) {
-                        additionsToDelete.set(addition.id, true);
-                    }
-                }
+                matches = VirtualMatch.filterAlreadyLinked(matches, explicitlyLinkedFiles);
             }
 
             // Delete additions that links to already linked files
             if (this.settings.onlyLinkOnce) {
-                for (const addition of additions) {
-                    if (alreadyLinkedFiles.has(addition.file)) {
-                        additionsToDelete.set(addition.id, true);
-                    }
-                }
+                matches = VirtualMatch.filterAlreadyLinked(matches, alreadyLinkedFiles);
             }
 
             // Delete additions that overlap
             // Additions are sorted by from position and after that by length, we want to keep longer additions
-            for (let i = 0; i < additions.length; i++) {
-                const addition = additions[i];
-                if (additionsToDelete.has(addition.id)) {
-                    continue;
-                }
+            matches = VirtualMatch.filterOverlapping(matches, this.settings.onlyLinkOnce, excludedIntervalTree);
 
-                // Check if the addition is inside an excluded block
-                const overlaps = excludedIntervalTree.search([addition.from, addition.to]);
-                if (overlaps.length > 0) {
-                    additionsToDelete.set(addition.id, true);
-                    continue;
-                }
-
-                // Set all overlapping additions to be deleted
-                for (let j = i + 1; j < additions.length; j++) {
-                    const otherAddition = additions[j];
-                    if (otherAddition.from >= addition.to) {
-                        break;
-                    }
-                    additionsToDelete.set(otherAddition.id, true);
-                }
-
-                // Set all additions that link to the same file to be deleted
-                if (this.settings.onlyLinkOnce) {
-                    for (let j = i + 1; j < additions.length; j++) {
-                        const otherAddition = additions[j];
-                        if (additionsToDelete.has(otherAddition.id)) {
-                            continue;
-                        }
-
-                        if (otherAddition.file === addition.file) {
-                            additionsToDelete.set(otherAddition.id, true);
-                        }
-                    }
-                }
-            }
-
-            for (const addition of additions) {
-                if (!additionsToDelete.has(addition.id)) {
-                    filteredAdditions.push(addition);
-                    alreadyLinkedFiles.add(addition.file);
-                }
-            }
+            // Store the files that are linked by a virtual link
+            matches.forEach((addition) => addition.files.forEach((f) => alreadyLinkedFiles.add(f)));
 
             // Get the cursor position
             const cursorPos = view.state.selection.main.from;
@@ -362,7 +255,7 @@ class AutoLinkerPlugin implements PluginValue {
             const lineStart = view.state.doc.lineAt(cursorPos).from;
             const lineEnd = view.state.doc.lineAt(cursorPos).to;
 
-            filteredAdditions.forEach((addition) => {
+            matches.forEach((addition) => {
                 const [from, to] = [addition.from, addition.to];
                 const cursorNearby = cursorPos >= from - 0 && cursorPos <= to + 0;
 
@@ -406,7 +299,8 @@ class AutoLinkerPlugin implements PluginValue {
                         from,
                         to,
                         Decoration.replace({
-                            widget: addition.widget,
+                            // widget: addition.widget,
+                            widget: new VirtualLinkWidget(addition),
                         })
                     );
                 }
