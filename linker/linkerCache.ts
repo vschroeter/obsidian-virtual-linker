@@ -34,9 +34,11 @@ export class PrefixNode {
 export class VisitedPrefixNode {
     node: PrefixNode;
     caseIsMatched: boolean;
-    constructor(node: PrefixNode, caseIsMatched: boolean = true) {
+    startedAtWordBeginning: boolean;
+    constructor(node: PrefixNode, caseIsMatched: boolean = true, startedAtWordBeginning: boolean = false) {
         this.node = node;
         this.caseIsMatched = caseIsMatched;
+        this.startedAtWordBeginning = startedAtWordBeginning;
     }
 }
 
@@ -47,6 +49,7 @@ export class MatchNode {
     value: string = '';
     isAlias: boolean = false;
     caseIsMatched: boolean = true;
+    startsAtWordBoundary: boolean = false;
     requiresCaseMatch: boolean = false;
 
     get end(): number {
@@ -109,6 +112,9 @@ export class PrefixTree {
                 }
                 currentNode = currentNode.parent;
             }
+
+            // Check if the match starts at a word boundary
+            matchNode.startsAtWordBoundary = node.startedAtWordBeginning;
 
             if (matchNode.requiresCaseMatch && !matchNode.caseIsMatched) {
                 continue;
@@ -396,16 +402,18 @@ export class PrefixTree {
 
         chars.forEach((c) => {
             // char = char.toLowerCase();
-            if (!this.settings.matchOnlyWholeWords || PrefixTree.checkWordBoundary(c)) { // , this.settings.wordBoundaryRegex
-                newNodes.push(new VisitedPrefixNode(this.root));
+            const isBoundary = PrefixTree.checkWordBoundary(c);
+            if (this.settings.matchAnyPartsOfWords || isBoundary || this.settings.matchEndOfWords) { // , this.settings.wordBoundaryRegex
+                newNodes.push(new VisitedPrefixNode(this.root, true, isBoundary));
             }
 
             for (const node of this._currentNodes) {
                 const child = node.node.children.get(c);
+                const startedAtBoundary = node.startedAtWordBeginning;
                 if (child) {
                     const newPrefixNodes = newNodes.map((n) => n.node);
                     if (!newPrefixNodes.includes(child)) {
-                        newNodes.push(new VisitedPrefixNode(child, char == c));
+                        newNodes.push(new VisitedPrefixNode(child, char == c, startedAtBoundary));
                     }
                 }
             }

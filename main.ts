@@ -11,7 +11,8 @@ export interface LinkerPluginSettings {
     advancedSettings: boolean;
     linkerActivated: boolean;
     suppressSuffixForSubWords: boolean;
-    matchOnlyWholeWords: boolean;
+    matchAnyPartsOfWords: boolean;
+    matchEndOfWords: boolean;
     matchBeginningOfWords: boolean;
     includeAllFiles: boolean;
     linkerDirectories: string[];
@@ -48,7 +49,8 @@ export interface LinkerPluginSettings {
 const DEFAULT_SETTINGS: LinkerPluginSettings = {
     advancedSettings: false,
     linkerActivated: true,
-    matchOnlyWholeWords: true,
+    matchAnyPartsOfWords: false,
+    matchEndOfWords: true,
     matchBeginningOfWords: true,
     suppressSuffixForSubWords: false,
     includeAllFiles: true,
@@ -563,20 +565,20 @@ class LinkerSettingTab extends PluginSettingTab {
 
         // Toggle setting to match only whole words or any part of the word
         new Setting(containerEl)
-            .setName('Match only whole words')
-            .setDesc('If activated, only whole words are matched. Otherwise, every part of a word is found.')
+            .setName('Match any part of a word')
+            .setDesc('If deactivated, only whole words are matched. Otherwise, every part of a word is found.')
             .addToggle((toggle) =>
-                toggle.setValue(this.plugin.settings.matchOnlyWholeWords).onChange(async (value) => {
+                toggle.setValue(this.plugin.settings.matchAnyPartsOfWords).onChange(async (value) => {
                     // console.log("Match only whole words: " + value);
-                    await this.plugin.updateSettings({ matchOnlyWholeWords: value });
+                    await this.plugin.updateSettings({ matchAnyPartsOfWords: value });
                     this.display();
                 })
             );
 
-        if (this.plugin.settings.matchOnlyWholeWords) {
+        if (!this.plugin.settings.matchAnyPartsOfWords) {
             // Toggle setting to match only beginning of words
             new Setting(containerEl)
-                .setName('Match also beginning of words')
+                .setName('Match the beginning of words')
                 .setDesc('If activated, the beginnings of words are also linked, even if it is not a whole match.')
                 .addToggle((toggle) =>
                     toggle.setValue(this.plugin.settings.matchBeginningOfWords).onChange(async (value) => {
@@ -585,10 +587,22 @@ class LinkerSettingTab extends PluginSettingTab {
                         this.display();
                     })
                 );
+
+            // Toggle setting to match only end of words
+            new Setting(containerEl)
+                .setName('Match the end of words')
+                .setDesc('If activated, the ends of words are also linked, even if it is not a whole match.')
+                .addToggle((toggle) =>
+                    toggle.setValue(this.plugin.settings.matchEndOfWords).onChange(async (value) => {
+                        // console.log("Match only end of words: " + value);
+                        await this.plugin.updateSettings({ matchEndOfWords: value });
+                        this.display();
+                    })
+                );
         }
 
         // Toggle setting to suppress suffix for sub words
-        if (!this.plugin.settings.matchOnlyWholeWords || this.plugin.settings.matchBeginningOfWords) {
+        if (this.plugin.settings.matchAnyPartsOfWords || this.plugin.settings.matchBeginningOfWords) {
             new Setting(containerEl)
                 .setName('Suppress suffix for sub words')
                 .setDesc('If activated, the suffix is not added to links for subwords, but only for complete matches.')

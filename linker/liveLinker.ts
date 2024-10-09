@@ -136,14 +136,25 @@ class AutoLinkerPlugin implements PluginValue {
 
                 // If we are at a word boundary, get the current fitting files
                 const isWordBoundary = PrefixTree.checkWordBoundary(char); // , this.settings.wordBoundaryRegex
-                if (!this.settings.matchOnlyWholeWords || this.settings.matchBeginningOfWords || isWordBoundary) {
+                if (this.settings.matchAnyPartsOfWords || this.settings.matchBeginningOfWords || isWordBoundary) {
                     const currentNodes = this.linkerCache.cache.getCurrentMatchNodes(
                         i,
                         this.settings.excludeLinksToOwnNote ? mappedFile : null
                     );
+
                     if (currentNodes.length > 0) {
                         // console.log('NODES', currentNodes);
                         for (const node of currentNodes) {
+                            // Check if we want to include this note based on the settings
+                            if (!this.settings.matchAnyPartsOfWords) {
+                                if (
+                                    (this.settings.matchBeginningOfWords && !node.startsAtWordBoundary) &&
+                                    (this.settings.matchEndOfWords && !isWordBoundary)
+                                ) {
+                                    continue;
+                                }
+                            }
+
                             const nFrom = node.start;
                             const nTo = node.end;
                             const name = text.slice(nFrom, nTo);

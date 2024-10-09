@@ -94,10 +94,22 @@ export class GlossaryLinker extends MarkdownRenderChild {
 
                             // If we are at a word boundary, get the current fitting files
                             const isWordBoundary = PrefixTree.checkWordBoundary(char); // , this.settings.wordBoundaryRegex
-                            if (!this.settings.matchOnlyWholeWords || this.settings.matchBeginningOfWords || isWordBoundary) {
+                            if (this.settings.matchAnyPartsOfWords || this.settings.matchBeginningOfWords || isWordBoundary) {
                                 const currentNodes = this.linkerCache.cache.getCurrentMatchNodes(i);
                                 if (currentNodes.length > 0) {
                                     currentNodes.forEach((node) => {
+                                        // Check if we want to include this note based on the settings
+                                        if (!this.settings.matchAnyPartsOfWords) {
+                                            if (
+                                                this.settings.matchBeginningOfWords &&
+                                                !node.startsAtWordBoundary &&
+                                                this.settings.matchEndOfWords &&
+                                                !isWordBoundary
+                                            ) {
+                                                return;
+                                            }
+                                        }
+
                                         const nFrom = node.start;
                                         const nTo = node.end;
                                         const name = text.slice(nFrom, nTo);
@@ -151,14 +163,13 @@ export class GlossaryLinker extends MarkdownRenderChild {
 
                             const span = match.getCompleteLinkElement();
 
-                            
                             if (match.from > 0) {
                                 parent?.insertBefore(document.createTextNode(text.slice(lastTo, match.from)), childNode);
                             }
 
                             parent?.insertBefore(span, childNode);
                             lastTo = match.to;
-                        })
+                        });
 
                         const textLength = text.length;
                         if (lastTo < textLength) {
