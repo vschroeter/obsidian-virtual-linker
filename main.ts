@@ -181,7 +181,7 @@ export default class LinkerPlugin extends Plugin {
                     menu.addItem((item) => {
                         // Item to convert a virtual link to a real link
                         item.setTitle(
-                            '[Virtual Linker] Converting to real link is not possible in read mode, switch to edit or source mode to convert.'
+                            '[Virtual Linker] Converting link is not here.'
                         ).setIcon('link');
                     });
                 }
@@ -882,7 +882,7 @@ class LinkerSettingTab extends PluginSettingTab {
                     await this.plugin.updateSettings({ alwaysShowMultipleReferences: value });
                 })
             );
-            
+
         new Setting(containerEl)
             .setName('Virtual link suffix')
             .setDesc('The suffix to add to auto generated virtual links.')
