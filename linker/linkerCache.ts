@@ -416,7 +416,21 @@ export class PrefixTree {
     static checkWordBoundary(char: string): boolean { // , regexString: string
         // const pattern = /[\/\n\t\r\s,.!?:"`´()\[\]'{}|~\p{Emoji_Presentation}\p{Extended_Pictographic}]/u;
 
-        let pattern = /[\t- !-/:-@\[-`{-~\p{Emoji_Presentation}\p{Extended_Pictographic}]/u;
+        // let pattern = /[\t- !-/:-@\[-`{-~\p{Emoji_Presentation}\p{Extended_Pictographic}]/u;
+
+        // \p{L}: Any kind of letter from any language.
+        // \p{Ll}: Lowercase letter.
+        // \p{Lu}: Uppercase letter.
+        // \p{M}: Mark (accents, combining marks).
+        // \p{N}: Number (digit, letter-like number).
+        // \p{P}: Punctuation.
+        // \p{S}: Symbol (currency, math symbols, etc.).
+        // \p{Z}: Separator (space, line breaks).
+        // \p{C}: Other (control chars, unassigned, etc.).
+
+        // let pattern = /[\p{P}\p{Z}\p{S}\p{C}\p{Emoji_Presentation}\p{Extended_Pictographic}]/u;
+        let pattern = /[^\p{L}]/u;
+
         // if (regexString) {
         //     if (typeof regexString !== 'string') {
         //         regexString = regexString.toString();
