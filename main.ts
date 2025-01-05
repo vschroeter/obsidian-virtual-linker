@@ -1,4 +1,4 @@
-import { App, MarkdownView, Menu, Plugin, PluginSettingTab, Setting, TAbstractFile, TFile, TFolder } from 'obsidian';
+import { App, EditorPosition, MarkdownView, Menu, Plugin, PluginSettingTab, Setting, TAbstractFile, TFile, TFolder } from 'obsidian';
 
 import { GlossaryLinker } from './linker/readModeLinker';
 import { liveLinkerPlugin } from './linker/liveLinker';
@@ -139,6 +139,130 @@ export default class LinkerPlugin extends Plugin {
                 return false;
             },
         });
+
+        this.addCommand({
+            id: 'convert-selected-virtual-links',
+            name: 'Convert All Virtual Links in Selection to Real Links',
+            checkCallback: (checking: boolean) => {
+                const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+                const editor = view?.editor;
+
+                if (!editor || !editor.somethingSelected()) {
+                    return false;
+                }
+
+                if (checking) return true;
+
+                // Get the selected text range
+                const from = editor.getCursor('from');
+                const to = editor.getCursor('to');
+
+                // Get the DOM element containing the selection
+                const cmEditor = (editor as any).cm;
+                if (!cmEditor) return false;
+
+                const selectionRange = cmEditor.dom.querySelector('.cm-content');
+                if (!selectionRange) return false;
+
+                // Find all virtual links in the selection
+                const virtualLinks = Array.from(selectionRange.querySelectorAll('.virtual-link-a'))
+                    .filter((link): link is HTMLElement => link instanceof HTMLElement)
+                    .map(link => ({
+                        element: link,
+                        from: parseInt(link.getAttribute('from') || '-1'),
+                        to: parseInt(link.getAttribute('to') || '-1'),
+                        text: link.getAttribute('origin-text') || '',
+                        href: link.getAttribute('href') || ''
+                    }))
+                    .filter(link => {
+                        const linkFrom = editor.offsetToPos(link.from);
+                        const linkTo = editor.offsetToPos(link.to);
+                        return this.isPosWithinRange(linkFrom, linkTo, from, to);
+                    })
+                    .sort((a, b) => a.from - b.from);
+
+                if (virtualLinks.length === 0) return;
+
+                // Process all links in a single operation
+                const replacements: {from: number, to: number, text: string}[] = [];
+
+                for (const link of virtualLinks) {
+                    const targetFile = this.app.vault.getAbstractFileByPath(link.href);
+                    if (!(targetFile instanceof TFile)) continue;
+
+                    const activeFile = this.app.workspace.getActiveFile();
+                    const activeFilePath = activeFile?.path ?? '';
+
+                    let absolutePath = targetFile.path;
+                    let relativePath = path.relative(
+                        path.dirname(activeFilePath),
+                        path.dirname(absolutePath)
+                    ) + '/' + path.basename(absolutePath);
+                    relativePath = relativePath.replace(/\\/g, '/');
+
+                    const replacementPath = this.app.metadataCache.fileToLinktext(targetFile, activeFilePath);
+                    const lastPart = replacementPath.split('/').pop()!;
+                    const shortestFile = this.app.metadataCache.getFirstLinkpathDest(lastPart!, '');
+                    let shortestPath = shortestFile?.path === targetFile.path ? lastPart : absolutePath;
+
+                    // Remove .md extension if needed
+                    if (!replacementPath.endsWith('.md')) {
+                        if (absolutePath.endsWith('.md')) absolutePath = absolutePath.slice(0, -3);
+                        if (shortestPath.endsWith('.md')) shortestPath = shortestPath.slice(0, -3);
+                        if (relativePath.endsWith('.md')) relativePath = relativePath.slice(0, -3);
+                    }
+
+                    const useMarkdownLinks = this.settings.useDefaultLinkStyleForConversion
+                        ? this.settings.defaultUseMarkdownLinks
+                        : this.settings.useMarkdownLinks;
+
+                    const linkFormat = this.settings.useDefaultLinkStyleForConversion
+                        ? this.settings.defaultLinkFormat
+                        : this.settings.linkFormat;
+
+                    let replacement = '';
+                    if (replacementPath === link.text && linkFormat === 'shortest') {
+                        replacement = `[[${replacementPath}]]`;
+                    } else {
+                        const path = linkFormat === 'shortest' ? shortestPath :
+                                   linkFormat === 'relative' ? relativePath :
+                                   absolutePath;
+
+                        replacement = useMarkdownLinks ?
+                            `[${link.text}](${path})` :
+                            `[[${path}|${link.text}]]`;
+                    }
+
+                    replacements.push({
+                        from: link.from,
+                        to: link.to,
+                        text: replacement
+                    });
+                }
+
+                // Apply all replacements in reverse order to maintain correct positions
+                for (const replacement of replacements.reverse()) {
+                    const fromPos = editor.offsetToPos(replacement.from);
+                    const toPos = editor.offsetToPos(replacement.to);
+                    editor.replaceRange(replacement.text, fromPos, toPos);
+                }
+            }
+        });
+
+    }
+
+    private isPosWithinRange(
+        linkFrom: EditorPosition,
+        linkTo: EditorPosition,
+        selectionFrom: EditorPosition,
+        selectionTo: EditorPosition
+    ): boolean {
+        return (
+            (linkFrom.line > selectionFrom.line ||
+             (linkFrom.line === selectionFrom.line && linkFrom.ch >= selectionFrom.ch)) &&
+            (linkTo.line < selectionTo.line ||
+             (linkTo.line === selectionTo.line && linkTo.ch <= selectionTo.ch))
+        );
     }
 
     addContextMenuItem(menu: Menu, file: TAbstractFile, source: string) {
