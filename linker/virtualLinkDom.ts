@@ -64,7 +64,10 @@ export class VirtualMatch {
             spanReferences.classList.add('multiple-files-references');
         }
 
-        files = files || this.files;
+        files = files ?? this.files;
+
+
+
         files.forEach((file, index) => {
             if (index === 0) {
                 const bracket = document.createElement('span');
@@ -73,7 +76,7 @@ export class VirtualMatch {
             }
 
             let linkText = ` ${index + 1} `;
-            if (index < files.length - 1) {
+            if (index < files!.length - 1) {
                 linkText += '|';
             }
 
@@ -81,7 +84,7 @@ export class VirtualMatch {
             const link = this.getLinkAnchorElement(linkText, linkHref);
             spanReferences.appendChild(link);
 
-            if (index == files.length - 1) {
+            if (index == files!.length - 1) {
                 const bracket = document.createElement('span');
                 bracket.textContent = ']';
                 spanReferences.appendChild(bracket);
