@@ -131,6 +131,24 @@ To apply custom styling to the links, you can add a CSS-snippet at `VaultFolder/
 > [!Note]
 > If you want to apply custom styling, don't forget to turn off the "Apply default link styling" in the settings.
 
+## Commands
+
+The plugin provides the following commands that you can use:
+
+- **Convert All Virtual Links in Selection to Real Links**: Converts all virtual links within the selected text to real links.
+- **Activate Virtual Linker**: Activates the virtual linker if it is currently deactivated.
+- **Deactivate Virtual Linker**: Deactivates the virtual linker if it is currently activated.
+
+You can access these commands from the command palette or assign custom hotkeys to them in the settings.
+
+## Context Menu Options
+
+When right-clicking on a virtual link, the following options are available in the context menu:
+
+- **Convert to real link**: Converts the selected virtual link to a real link.
+- **Exclude this file**: Adds the `linker-exclude` tag to the file, preventing it from being matched by the virtual linker.
+- **Include this file**: Adds the `linker-include` tag to the file, ensuring it is matched by the virtual linker.
+
 ## How to use for development
 
 - Clone this repo (into `your-vault/.obsidian/plugins/`).
